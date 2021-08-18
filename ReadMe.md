@@ -1,5 +1,6 @@
 # Seurat_demo 
 目的：Seurat 示例网站。
+My another 单细胞代码库: https://github.com/DawnEve/scRNAseqCode
 
 因为Seurat官方网站最近常常打不开，这里编写几个示例网页，方便代码查询。不定期更新。
 
