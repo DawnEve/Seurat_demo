@@ -1,0 +1,12 @@
+v0.1 add seurat 3k 教程
+v0.2 add sctransform
+
+
+
+
+
+
+source: $ cp ~/data/scScripts/backup/00/01.html sctransform.html
+local: http://y.biomooc.com:8080/index/Seurat_demo/
+WAN: http://seurat.biomooc.com/
+
