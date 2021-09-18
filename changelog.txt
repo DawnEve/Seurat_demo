@@ -1,7 +1,8 @@
 v0.1 add seurat 3k 教程
 v0.2 add sctransform
-
-
+v0.3 add cell cycle
+  Regressing out S.Score, G2M.Score
+  Regressing out CC.Difference
 
 
 
@@ -9,4 +10,26 @@ v0.2 add sctransform
 source: $ cp ~/data/scScripts/backup/00/01.html sctransform.html
 local: http://y.biomooc.com:8080/index/Seurat_demo/
 WAN: http://seurat.biomooc.com/
+
+
+
+-------------
+How to add / update a html file?
+1. download file from 
+https://github.com/satijalab/seurat/tree/master/vignettes
+click raw, copy contents to local station.
+
+2. save as xx.Rmd to
+/data/wangjl/scScripts/dustbin/
+|-01/xx.Rmd
+|-output/images/
+
+download dataset needed, put in the right dir.
+
+3. click Knit, select knot to html.
+wait until the final html file output.
+if errors occur, try to solve it.
+
+4. put the output html to this repo.
+add links to index.html
 
