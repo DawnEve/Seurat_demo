@@ -3,10 +3,11 @@ v0.2 add sctransform
 v0.3 add cell cycle
   Regressing out S.Score, G2M.Score
   Regressing out CC.Difference
+v0.4 add CellChat demo
 
 
 
-
+path: /home/wangjl/html/index/Seurat_demo/
 source: $ cp ~/data/scScripts/backup/00/01.html sctransform.html
 local: http://y.biomooc.com:8080/index/Seurat_demo/
 WAN: http://seurat.biomooc.com/
