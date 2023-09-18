@@ -5,6 +5,7 @@ v0.3 add cell cycle
   Regressing out CC.Difference
 v0.4 add CellChat demo
 v0.5 fix ReadMe.txt
+v0.6 add NMF demo
 ## git commit 
 ### ==> git push origin main  :  https://github.com/dawneve/Seurat_demo
 

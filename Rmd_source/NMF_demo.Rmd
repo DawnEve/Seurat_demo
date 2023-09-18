@@ -1,0 +1,490 @@
+---
+title: "NMF_demo"
+date: "2023-09-18"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true  #浮动顶部目录
+    collapsed: false
+    smooth_scroll: true 
+---
+
+
+```         
+#BiocManager::install('Biobase')
+#install.packages('NMF') ## install.extras('NMF')
+#install.packages("ggsci")
+#BiocManager::install('limma')
+```
+
+# 0. test time consuming
+
+## (1)intro
+单细胞研究避免不了要回答两个问题：组织中有哪些细胞类型，每个细胞类型又有哪些表达模式？NMF解决这类问题具有天然的优势，因为它分解的因子很容易与细胞类型或表达模式对应起来。Github上有很多基于NMF和其变种算法的单细胞分析工具，我比较喜欢的有单细胞整合分析工具liger和空间转录组去卷积工具SPOTlight。应用NMF分析方法发表的高分文章也有很多，我给大家介绍一篇，更多的文章请自己搜索。
+
+对比PCA分析的结果，NMF虽然毫不逊色，但是它的运行时间更长。（1min vs 1h）
+
+我们为什么要用NMF呢？一个很重要的原因是NMF的因子可解释性更强，每个因子贡献度最大的基因基本代表了某种或某个状态细胞的表达模式，相比差异分析得到marker基因更有代表性。
+
+
+NMF包通过nmf()函数实现矩阵分解，它的用法及重要参数如下：
+`> nmf(x, rank, method, seed, nrun, ...)`
+```
+x：待分解非负矩阵，数据格式可以是matrix，data.frame， ExpressionSet
+rank：分解的基数量，对于单细胞数据，可以设置为期望的细胞类型数量或表达模式数量
+method：因式分解的常用方法，这里介绍三种常用的
+1、基于KL 散度进行度量目标函数的多重迭代梯度下降算法——brunet(默认算法)
+2、基于欧几里得距离度量目标函数的多重迭代梯度下降算法——lee
+3、交替最小二乘法(Alternating Least Squares(ALS))——snmf/r
+seed：因式分解的初始化种子
+nrun：运行次数
+```
+
+rank值一般是要通过测试评估后确定的，但是分析单细胞数据这是一个很难完成的工作，5000个细胞的测试时间可能超过10个小时。
+替代办法是使用经验或先验知识指定，可以尝试略多于细胞类型或细胞状态（细胞亚群再聚类时）的一个数值，例如我在本帖的PBMC数据分解中就指定为rank=10。
+
+
+因为NMF一般是从随机数开始，通过迭代算法收敛误差的方法求出最优W和H矩阵，所以seed不同最后的结果也不同。为了减少seed的影响求得最优解，常规的办法是通过nrun参数设置运行100-200次矩阵分解选取最优值，也可以使用特殊的算法选择一个最佳的seed（设置seed='nndsvd'或seed='ica'），这样运行一次也能得到最优解。
+
+
+## (2)耗时
+
+```{r}
+library(Biobase)
+library(NMF)
+library(ggplot2)
+library(dplyr) #tidyverse
+library(patchwork)
+
+## 参数测试
+data("esGolub")
+#str(esGolub)
+
+if(0){
+  #esGolub <- esGolub[1:500,]
+  t1 <- nmf(esGolub, 3, method = "brunet", seed = 219)
+  runtime(t1)   # elapsed: 1.358
+  
+  t2 <- nmf(esGolub, 3, method = "lee", seed = 219)
+  runtime(t2)   # elapsed: 1.884 
+  
+  t3 <- nmf(esGolub, 3, method = "snmf/r", seed = 219)
+  runtime(t3)   # elapsed: 1.774
+  
+  t4 <- nmf(esGolub, 3, method = "brunet", seed = 'nndsvd')
+  runtime(t4)   # elapsed: 3.058 
+  
+  t5 <- nmf(esGolub, 3, method = "brunet", nrun = 100)
+  runtime(t5)   # elapsed: 2.089
+  
+  t6 <- nmf(esGolub, 3, method = "nsNMF", nrun = 100)
+  runtime(t6)   # elapsed: 2.207 
+}
+```
+
+# 1. pbmc3k
+
+```{r, fig.width=4, fig.height=3.5}
+library(Seurat)
+scObj = readRDS("../result/data/pbmc_tutorial.rds")
+DimPlot(scObj, label = T)
+
+
+if(0){
+  library(NMF)
+  
+  ##(1) 创建seurat对象----
+  pbmc <- Read10X_h5("pbmc.h5")
+  pbmc <- CreateSeuratObject(pbmc, project = "pbmc", min.cells = 3, min.features = 500)
+  pbmc$percent.mt <- PercentageFeatureSet(pbmc, pattern = "^MT-")
+  pbmc <- subset(pbmc, percent.mt<20)
+  pbmc <- NormalizeData(pbmc) %>% FindVariableFeatures() %>% ScaleData(do.center = F)
+  
+  ##(2) 使用pca的分解结果降维聚类----
+  pbmc <- RunPCA(pbmc)
+  set.seed(219)
+  pbmc.pca <- RunUMAP(pbmc, dims = 1:15) %>% FindNeighbors(dims = 1:15) %>% FindClusters()
+  
+  ## 结果可视化
+  DimPlot(pbmc.pca, label = T) + ggsci::scale_color_igv()
+  #ggsave("pbmc_pca.png", p, width = 9, height = 6)
+  
+  p <- FeaturePlot(pbmc.pca, features = c('CD3D', 'CD3E', 'MS4A1', 'CD79A', 'GNLY', 'NKG7', 'CD14', 
+                                          'FCGR3A', 'PPBP', 'FCER1A', 'CD4', 'CD8A'), ncol = 4)
+  p
+  #ggsave("pbmc_pca_markers.png", p, width = 12, height = 8)
+}
+```
+
+
+
+
+
+
+
+## (3)基于NMF分解的降维聚类
+
+```{r, width=4, height=3.5}
+pbmc=scObj
+
+## 高变基因表达矩阵的分解
+# pbmc大体可分成T，B，NK，CD14 Mono，CD16 Mono，DC，Platelet等类型，考虑冗余后设置rank=10
+vm <- pbmc@assays$RNA@scale.data
+# 直接做 NMF 会报错，因为 起始矩阵有负数。
+# 错误: NMF::nmf - Input matrix x contains some negative entries.
+# 过滤
+vm[vm < 0] <- 0 #负数设置为 0
+dim(vm)
+vm <- vm[apply(vm, 1, var) > 0, ] #全是0的行去掉
+dim(vm)
+```
+
+
+### 1) 做非负矩阵分解
+
+```{r, fig.width=4, fig.height=3.5}
+if(0){
+  res <- nmf(vm, rank=11, 
+             nrun=1, #默认1
+             method = "snmf/r", seed = 'nndsvd')
+  # 默认交替最小二乘法(Alternating Least Squares(ALS))——snmf/r  
+  # 参数rank=，是期望的细胞亚群数量
+  
+  # 保存结果
+  saveRDS(res, file = "../result/data/NMF_res.list.rds")
+}else{
+  res=readRDS("../result/data/NMF_res.list.rds")
+}
+
+
+if(0){
+  # 聚类效果: 不好，有很长的飘尾
+  res2 <- nmf(vm, rank=11, 
+             nrun=1, #seed = 'ica', 
+             method = 'nsNMF')
+  # 12:07 --> 5871.753  = 97 min
+  # 保存结果
+  saveRDS(res2, file = "data/NMF_res2.list.rds")
+  #res=res2
+  #res=readRDS("data/NMF_res.list.rds")
+}
+if(0){
+  # 聚类效果: 不好，很零散，15类
+  #install.packages("fastICA")
+  res3 <- nmf(vm, rank=11, 
+              nrun=1, seed = 'ica', 
+              method = 'nsNMF')
+  # 15:31-->5851.158 = 97min
+  runtime(res3)
+}
+```
+
+
+
+
+### 2)分解结果返回suerat对象
+
+```{r, fig.width=4, fig.height=3.5}
+pbmc@reductions$nmf <- pbmc@reductions$pca
+pbmc@reductions$nmf@cell.embeddings <- t(coef(res))    
+pbmc@reductions$nmf@feature.loadings <- basis(res)  
+
+
+# 查看结果：//todo?
+plot(t(coef(res) ), 
+     col= scObj$seurat_clusters)
+head(basis(res))
+```
+
+
+### 3) 基于nmf分解做降维聚类
+
+- 使用 nmf 代替 PCA，后续处理不变。
+
+```{r, fig.width=4, fig.height=3.5}
+set.seed(219)
+pbmc.nmf <- RunUMAP(pbmc, reduction = 'nmf', dims = 1:11) %>% 
+  FindNeighbors(reduction = 'nmf', dims = 1:11) %>% 
+  FindClusters(resolution = 0.6)
+
+## 结果可视化  
+p <- DimPlot(pbmc.nmf, label = T) +
+  ggsci::scale_color_igv()+ggtitle("NMF")
+p
+```
+
+```{r, fig.width=8.5, fig.height=4.5}
+#ggsave("pbmc_nmf.png", p, width = 9, height = 6)
+p2 <- FeaturePlot(pbmc.nmf, features = c('CD3D', 'CD3E', 'MS4A1', 'CD79A', 'GNLY', 'NKG7', 'CD14', 
+                                        'FCGR3A', 'PPBP', 'FCER1A', 'CD4', 'CD8A'), ncol = 4)
+p2
+#ggsave("pbmc_nmf_markers.png", p, width = 12, height = 8)
+```
+
+
+
+
+## (4). biomarker
+
+```{r, fig.width=17, fig.height=4}
+pbmc.markers <- FindAllMarkers(pbmc.nmf, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+pbmc.markers %>% group_by(cluster) %>% top_n(n = 2, wt = avg_log2FC)
+
+# auto top N
+DotPlot(pbmc.nmf, features = c(
+  pbmc.markers %>% group_by(cluster) %>% top_n(n = 7, wt = avg_log2FC) %>% pull(gene) %>% unique()
+), cluster.idents = T)+RotatedAxis()+ggtitle("pbmc3k NMF")
+```
+
+```{r, fig.width=9, fig.height=3.8}
+# manual
+DotPlot(pbmc.nmf, features = unique(c(
+  "CD3D", "CD3E", "CD3G", #T
+  "CD4", "CD8A", "CD8B",  #CD4 or CD8
+  "CD27", "CCR7",           #naive CD4+T
+  "IL7R", "S100A4", #memory CD4+
+  "ISG15", 
+  "GZMK", #CD8+ effective?
+  "GZMH", "GZMB", "GZMA",
+  "NCR3", "NKG7", "GNLY","CCL3", #NK
+  
+  #"CCR10", "IL2RA", "CD52", "CMTM7", "FOXP3", #Treg
+  
+  "CD79A", "CD79B", "MS4A1", #B
+  "CD1C","FCER1A", "CST3", #mDC
+  
+  "CD68","S100A12",
+  "LYZ", "CD14",   #CD14+Mono
+  "FCGR3A","MS4A7", #CD16+monocyte
+  
+  "PPBP",#Platelet
+  "GAPDH"
+)))+RotatedAxis()+ggtitle("pbmc3k NMF")
+```
+
+
+
+
+```{r, fig.width=6.5, fig.height=3.3}
+## plot correlation ----
+DimPlot(pbmc, label = T)+ggtitle("based on PCA") +
+ (DimPlot(pbmc.nmf, label = T) + ggtitle("based on NMF"))
+```
+
+
+### 分类的一致性：PCA vs NMF
+```{r}
+pbmc$cid=rownames(pbmc@meta.data)
+dat1=FetchData(pbmc, vars = c("cid", "seurat_clusters"))
+colnames(dat1) =c("cid", "cluster1")
+head(dat1)
+
+#
+pbmc.nmf$cid=rownames(pbmc.nmf@meta.data)
+dat2=FetchData(pbmc.nmf, vars = c("cid", "seurat_clusters"))
+colnames(dat2) =c("cid", "cluster2")
+dat2=dat2[rownames(dat1),] #order
+head(dat2)
+
+table(dat1$cluster1, dat2$cluster2)
+table(dat2$cluster2)
+table(pbmc.nmf$seurat_clusters)
+```
+
+
+
+## (5)人工定义细胞类型
+
+```{r, fig.width=4.5, fig.height=3.5}
+pbmc.nmf$celltype <- pbmc.nmf$seurat_clusters
+pbmc.nmf$celltype <- recode(pbmc.nmf$celltype,
+                            "0" = "CD14 Mono",
+                            "6"= "CD16 Mono",
+                            "1" = "Naive CD8",
+                            "4" = "Naive CD8",
+                            '2' = "B cells", 
+                            '3' = "Eff CD8+ T", 
+                            '5' = "CD4+ T", 
+                            '7' = "CD4+ T", 
+                            '8' = "NKs", 
+                            '9' = "DCs", 
+                            '10' = "Platelet"
+                            )
+p3 <- DimPlot(pbmc.nmf, group.by = 'celltype', label = T, label.size = 3) +  
+  ggsci::scale_color_npg(alpha = 0.6); p3
+```
+
+
+
+
+### 1) 查看细胞的因子上的荷载
+```{r, fig.width=9.1, fig.height=5.3}
+tmp <- data.frame(t(coef(res)), check.names = F)
+colnames(tmp) <- paste0("factor", 1:ncol(tmp))
+pbmc.nmf <- AddMetaData(pbmc.nmf, metadata = tmp) #给 str(pbmc.nmf@meta.data) 添加若干列
+
+p4 <- FeaturePlot(pbmc.nmf, features = paste0("factor", 1:11), ncol = 4); p4
+#ggsave("pbmc_nmf_factors.png", p4, width = 12, height = 8)
+
+## 查看细胞主成分上的荷载
+p5 <- FeaturePlot(pbmc.nmf, features = paste0("PC_", 1:12), ncol = 4); #p5 #略
+#ggsave("pbmc_nmf_PCs.png", p, width = 12, height = 8)
+
+# 对比上下两张图，很容易发现NMF的因子比PCA的PC轴解释性更强。
+```
+
+
+## (6) 提取celltype的signatures
+
+```{r, fig.width=4, fig.height=3.5}
+## 提取每个因子贡献度最大的20个基因
+f <- extractFeatures(res, 20L)
+f <- lapply(f, function(x) rownames(res)[x])
+f <- do.call("rbind", f)
+head(t(f) )
+#DT::datatable(t(f))
+```
+
+
+
+
+
+## (7) DotPlot
+```{r, fig.width=4, fig.height=3.5}
+# for DotPlot
+{
+  factors <- extractFeatures(res, 10L)
+  factors <- lapply(factors, function(x) rownames(res)[x])
+  factors <- do.call("rbind", factors)
+  print(dim(factors))
+  #DotPlot(pbmc.nmf, features = unique(unlist(lapply(factors, c))), cluster.idents = T) + RotatedAxis()
+}
+gene_list = unique(unlist(lapply(factors, c))); length(gene_list)
+#jsonlite::toJSON(gene_list)
+```
+
+
+### 1) 每个基因在各个cluster的 pct
+```{r, fig.width=4, fig.height=3.5}
+dat=pbmc.nmf@assays$RNA@data
+#features=rownames(pbmc)
+features=gene_list
+
+#
+rs=NULL;
+for(i in levels(pbmc.nmf)){
+  cells.1=WhichCells(pbmc.nmf, idents = i)
+  rs1=rowSums( dat[features, cells.1, drop=F] >0 ) / length(cells.1)
+  rs = cbind(rs, rs1)
+  print(dim(rs))
+}
+colnames(rs)=paste0("Cluster",levels(pbmc.nmf))
+dim(rs)
+head(rs)
+# 在每个cluster中都低于 0.3 的基因个数
+rs2=rs[rowSums(rs<0.3) >0, ]
+dim(rs) #108
+dim(rs2) #105
+
+# 按每个基因的最大百分比值排序
+rs3=apply(rs, 1, max)
+rs3=rs3[order(-rs3)]
+head(rs3)
+tail(rs3)
+#plot(rs3, n=100)
+
+
+library(pheatmap)
+#pheatmap(rs, border_color =NA)
+#dim(rs1)
+length(rs1)
+
+#
+#DotPlot(pbmc.nmf, features = c(
+#  head(names(rs1), n=60)
+#), cluster.idents = T) + RotatedAxis()
+#
+```
+
+
+
+
+### 2) 每个群中的 mean exp
+```{r, fig.width=4, fig.height=3.5}
+mean.fxn = function(x, pseudocount.use=1, base=2) {
+  return(log(x = rowMeans(x = expm1(x = x)) + pseudocount.use, base = base))
+}
+rsM=NULL;
+for(i in levels(pbmc.nmf)){
+  cells.1 = WhichCells(pbmc.nmf, idents = i)
+  rs0 = mean.fxn(dat[features, cells.1, drop=F])
+  rsM = cbind(rsM, rs0)
+  print(dim(rsM))
+}
+colnames(rsM)=paste0("Cluster",levels(pbmc.nmf))
+head(rsM)
+```
+
+```{r, fig.width=3.5, fig.height=3.2}
+p =pheatmap(rsM, border_color = NA, clustering_method = "ward.D2")
+# 获取聚类后的基因顺序
+row_cluster = cutree(p$tree_row,k=6)
+# 对聚类后的数据进行重新排序
+newOrder = rsM[p$tree_row$order,]
+#newOrder[,ncol(newOrder)+1]= row_cluster[match(rownames(newOrder),names(row_cluster))]
+#colnames(newOrder)[ncol(newOrder)]="Cluster"
+# 查看重新排序后的数据
+head(newOrder)
+
+
+
+
+# 基因在每个cluster的最大值排序
+rsM1=rev(sort(apply(rsM, 1, max)))
+head(rsM1)
+# plot(rsM1)
+
+
+# 求交集
+rs_inter = intersect( head(names(rsM1),n=50), head(names(rs3),n=50) )
+length(rs_inter)
+head(rs_inter)
+#DotPlot(pbmc.nmf, features = rs_inter, cluster.idents = T) + RotatedAxis()
+
+# 聚类的结果
+#DotPlot(pbmc.nmf, features = intersect( rownames(newOrder), head( names(rs3),n=90 ) ),
+#          #rownames(newOrder), 
+#        cluster.idents = T) + RotatedAxis()
+
+# 高表达比例 + 聚类后结果
+#DotPlot(pbmc.nmf, features = intersect( rownames(newOrder), head( names(rs3),n=75 ) ), 
+#        cluster.idents = T) + RotatedAxis()
+```
+
+
+### 高表达mean + 聚类后结果
+```{r, fig.width=12.5, fig.height=3.9}
+DotPlot(pbmc.nmf, features = intersect( rownames(newOrder), head( names(rsM1),n=50 ) ),
+        #rownames(newOrder), 
+        cluster.idents = T) + RotatedAxis()
+```
+
+
+# ref
+
+- [Chen, YP., Yin, JH., Li, WF. et al. Single-cell transcriptomics reveals regulators underlying immune cell diversity and immune subtypes associated with prognosis in nasopharyngeal carcinoma. Cell Res 30, 1024–1042 (2020). ](https://doi.org/10.1038/s41422-020-0374-x)
+- [Dissecting the heterogeneity of the alternative polyadenylation profiles in triple-negative breast cancers](https://pubmed.ncbi.nlm.nih.gov/32929364/) Fig2(C) Cophenetic and dispersion metrics for NMF across 2 to 10 clusters with 50 runs suggest 4 stable subtypes.
+- https://www.bilibili.com/video/BV1K3411x7J8/
+- https://cloud.tencent.com/developer/article/1806266
+
+
+== End ==
+
+
+
+
+
+
+
+
