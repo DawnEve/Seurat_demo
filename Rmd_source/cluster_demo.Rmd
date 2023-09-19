@@ -1,0 +1,549 @@
+---
+title: "机器学习之确定最佳聚类数目的10种方法"
+date: "2023-09-19"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    collapsed: false
+    smooth_scroll: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# 预加载包，防止出现过多加载 warning
+library(vegan)
+library(gclus)
+library(mclust)
+library(ggplot2)
+library(apcluster)
+library(factoextra)
+library(fpc)
+
+library(colorspace)
+library(plyr)
+```
+
+
+在聚类分析的时候确定最佳聚类数目是一个很重要的问题，比如kmeans函数就要你提供聚类数目这个参数，总不能两眼一抹黑乱填一个吧。之前也被这个问题困扰过，看了很多博客，大多泛泛带过。今天把看到的这么多方法进行汇总以及代码实现并尽量弄清每个方法的原理。
+
+数据集选用比较出名的wine数据集进行分析
+
+
+# 1. get data
+
+## (1) load data
+```{r, fig.width=4, fig.height=4}
+#install.packages("gclus")
+library(gclus) #聚类画图
+data(wine)
+
+dim(wine)
+head(wine)
+#View(wine)
+# 共 14 列
+colnames(wine) |> jsonlite::toJSON()
+#"Class", 分类：1，2，3
+#"Alcohol", 酒精含量
+#"Malic", 苹果酸
+#"Ash", 灰烬
+#"Alcalinity", 灰的碱度
+#"Magnesium", 镁
+#"Phenols", 总酚
+#"Flavanoids", 黄酮
+#"Nonflavanoid", 非类黄酮
+#"Proanthocyanins", 锦葵原花青素
+#"Intensity", 色彩强度
+#"Hue", 色相
+#"OD280", 吸光度 OD280/OD315稀释葡萄酒
+#"Proline" 脯氨酸
+```
+
+
+## (2) pre-processing
+```{r, fig.width=4, fig.height=4}
+# remove label
+dat=wine[, -1]
+dim(dat) #13 cols
+
+# scale to 100 of each column
+dat.scale = apply(dat, 2, function(x){
+  (x-mean(x)) / sd(x)
+})
+head(dat.scale)
+
+#head(scale(dat))
+table((scale(dat) - dat.scale)<1e-5)
+
+dat=dat.scale
+```
+
+
+# 2. mclust
+mclust包是聚类分析非常强大的一个包，也是上课时老师给我们介绍的一个包，每次导入时有一种科技感 :) 帮助文档非常详尽，可以进行聚类、分类、密度分析
+
+Mclust包方法有点“暴力”，聚类数目自定义，比如我选取的从1到20，然后一共14种模型，每一种模型都计算聚类数目从1到20的BIC值，最终确定最佳聚类数目，这种方法的思想很直接了当，但是弊端也就显然易见了——时间复杂度太高，效率低。
+
+```{r, fig.width=5, fig.height=4.5}
+# install.packages("mclust")
+library(mclust) #聚类Clustering、分类Classification、密度分析Density estimation
+m_clust <- Mclust(as.matrix(dat), G=1:20) #聚类数目从1一直试到20
+summary(m_clust)
+
+par(mar=c(4,4,1,1))
+plot(m_clust, "BIC")
+# 作者自己定义的BIC，值越大越好。并不是熟知的 贝叶斯信息准则
+```
+
+结论：除了2个指标外，其余都是n=3达到峰值。
+
+
+
+# 3. Nbclust
+Nbclust包是我在《R语言实战》上看到的一个包，思想和mclust包比较相近，也是定义了几十个评估指标，然后聚类数目从2遍历到15（自己设定），然后通过这些指标看分别在聚类数为多少时达到最优，最后选择指标支持数最多的聚类数目就是最佳聚类数目。
+
+```{r, fig.width=7, fig.height=3.5}
+# install.packages("NbClust")
+library(NbClust)
+set.seed(2023) #因为method选择的是kmeans，所以如果不设定种子，每次跑得结果可能不同
+
+par(mar=c(4,4,1,1))
+nb_clust <- NbClust(dat, distance = "euclidean",
+                    min.nc=2, max.nc=15, method = "kmeans",
+                    index = "alllong", alphaBeale = 0.1)
+
+```
+
+```{r, fig.width=4, fig.height=3}
+#xlab="聚类数", ylab = "支持指标数"
+par(mar=c(4,4,1,1))
+barplot(table(nb_clust$Best.nc[1,]),xlab = "Cluster Number", ylab = "Supporting Index Number")
+```
+
+可以看到有20个指标支持最佳聚类数目为3，3个指标支持聚类数为2，所以该方法推荐的最佳聚类数目为3.
+
+结论：分3类最优，支持的指标最多
+
+
+
+
+# 4. [elbow]组内平方误差和——拐点图
+想必之前动辄几十个指标，这里就用一个最简单的指标——sum of squared error (SSE)组内平方误差和来确定最佳聚类数目。这个方法也是出于《R语言实战》，自定义的一个求组内误差平方和的函数。
+
+```{r, fig.width=5, fig.height=3.5}
+wssplot <- function(data, nc=15, seed=1234){
+  # n=1时: 聚成一类的组内平方误差
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  # n=2:nc时
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum( kmeans(data, centers=i)$withinss )
+  }
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")
+}
+
+par(mar=c(4,4,1,1))
+wssplot(dat)
+```
+
+从一类到三类下降得很快，之后下降得很慢，所以最佳聚类个数选为3。
+
+
+随着聚类数目增多，每一个类别中数量越来越少，距离越来越近，因此WSS值肯定是随着聚类数目增多而减少的，所以关注的是斜率的变化，但WWS减少得很缓慢时，就认为进一步增大聚类数效果也并不能增强，存在得这个“肘点”就是最佳聚类数目，从一类到三类下降得很快，之后下降得很慢，所以最佳聚类个数选为三
+
+另外也有现成的包(factoextra)可以调用
+
+
+# 5. factoextra
+```{r, fig.width=4.5, fig.height=3.5}
+# install.packages("factoextra")
+library(factoextra)
+library(ggplot2)
+set.seed(1234)
+fviz_nbclust(dat, kmeans, method = "wss", k.max = 20) +
+  geom_vline(xintercept = 3, linetype = 2)
+```
+
+选定为3类为最佳聚类数目
+
+用该包下的fviz_cluster函数可视化一下聚类结果
+
+```{r, fig.width=4, fig.height=4}
+km.res <- kmeans(dat,3)
+fviz_cluster(km.res, data = dat)
+```
+
+
+
+
+
+# 6. PAM(Partitioning Around Medoids) 围绕中心点的分割算法
+
+k-means算法取得是均值，那么对于异常点其实对其的影响非常大，很可能这种孤立的点就聚为一类，一个改进的方法就是PAM算法，也叫k-medoids clustering
+
+首先通过fpc包中的pamk函数得到最佳聚类数目
+
+```{r, fig.width=4, fig.height=4}
+#install.packages("fpc")
+library(fpc)
+pamk.best <- pamk(dat)
+pamk.best$nc
+```
+
+pamk函数不需要提供聚类数目，也会直接自动计算出最佳聚类数，这里也得到为3
+
+得到聚类数提供给cluster包下的pam函数并进行可视化
+```{r, fig.width=7, fig.height=4}
+clust_2 = pam(dat, pamk.best$nc)
+plot(clust_2)
+
+#library(cluster)
+#par(mar=c(4,4,1,1))
+# clusplot( clust_2, main="" ) # 同上图 左
+```
+
+
+
+```{r, fig.width=4.3, fig.height=4}
+# we could also do:
+library(fpc)
+asw <- numeric(20)
+for (k in 2:20){
+  asw[[k]] <- pam(dat, k)$silinfo$avg.width
+}
+k.best <- which.max(asw)
+cat("silhouette-optimal number of clusters:", k.best, "\n")
+```
+
+
+
+# 7. Calinsky criterion
+这个评估标准定义[5]如下：
+
+其中，k是聚类数，N是样本数，SSw是我们之前提到过的组内平方和误差，SSb是组与组之间的平方和误差，SSw越小，SSb越大聚类效果越好，所以Calinsky criterion值一般来说是越大，聚类效果越好
+
+```{r, fig.width=3.5, fig.height=3.5}
+#install.packages("vegan")
+library(vegan)
+ca_clust <- cascadeKM(dat, 1, 10, iter = 1000)
+ca_clust$results
+
+par(mar=c(4,4,1,1))
+plot(ca_clust$results[1,], type="o")
+```
+
+可以看到该函数把组内平方和误差和Calinsky都计算出来了，可以看到calinski在聚类数为3时达到最大值。
+```{r, fig.width=4, fig.height=4}
+calinski.best <- as.numeric(which.max(ca_clust$results[2,]))
+calinski.best
+
+#画图出来观察一下
+plot(ca_clust, sortg = TRUE, grpmts.plot = TRUE)
+# 注意到那个红点就是对应的最大值，自带的绘图横轴纵轴取的可能不符合我们的直觉，把数据取出来自己单独画一下
+calinski<-as.data.frame(ca_clust$results[2,])
+calinski$cluster <- c(1:10)
+library(ggplot2)
+ggplot(calinski,aes(x = calinski[,2], y = calinski[,1]))+geom_line()+theme_bw()
+```
+
+这个看上去直观多了。这就很清晰的可以看到在聚类数目为3时，calinski指标达到了最大值，所以最佳数目为3
+
+
+
+
+
+
+
+
+# 8.Affinity propagation (AP) clustering
+
+- 这个本质上是类似kmeans或者层次聚类一样，是一种聚类方法，因为不需要像kmeans一样提供聚类数，会自动算出最佳聚类数，因此也放到这里作为一种计算最佳聚类数目的方法。
+- AP算法的基本思想是将全部样本看作网络的节点，然后通过网络中各条边的消息传递计算出各样本的聚类中心。聚类过程中，共有两种消息在各节点间传递，分别是吸引度( responsibility)和归属度(availability) 。
+- AP算法通过迭代过程不断更新每一个点的吸引度和归属度值，直到产生m个高质量的Exemplar（类似于质心），同时将其余的数据点分配到相应的聚类中[7]
+
+```{r, fig.width=4, fig.height=4}
+#install.packages("apcluster")
+library(apcluster)
+ap_clust <- apcluster(negDistMat(r=2), dat)
+length(ap_clust@clusters) # 15
+#该聚类方法推荐的最佳聚类数目为15，再用热力图可视化一下
+heatmap(ap_clust)
+```
+
+选x或者y方向看(对称)，可以数出来“叶子节点”一共15个
+
+
+
+
+
+# 9. 轮廓系数 Average silhouette method
+轮廓系数是类的密集与分散程度的评价指标。
+
+s(i) = [b(i) - a(i)] / max(a(i), b(i))
+
+a(i)是测量组内的相似度,b(i)是测量组间的相似度，s(i)范围从-1到1，
+值越大说明组内吻合越高，组间距离越远——也就是说，轮廓系数值越大，聚类效果越好[9]
+
+```{r, fig.width=5, fig.height=3.5}
+require(cluster)
+library(factoextra)
+fviz_nbclust(dat, kmeans, method = "silhouette", k.max = 20)
+```
+
+可以看到也是在聚类数为3时轮廓系数达到了峰值，所以最佳聚类数为3
+
+
+
+
+# 10. Gap Statistic
+之前我们提到了WSSE组内平方和误差，该种方法是通过找“肘点”来找到最佳聚类数，肘点的选择并不是那么清晰，因此斯坦福大学的Robert等教授提出了Gap Statistic方法，定义的Gap值为[9]
+
+Gap<sub>n</sub>(k) = En( log(Wk)) - logWk
+
+取对数的原因是因为Wk的值可能很
+
+大通过这个式子来找出Wk跌落最快的点，Gap最大值对应的k值就是最佳聚类数
+```{r, fig.width=4, fig.height=3.5}
+library(cluster)
+set.seed(123)
+gap_clust <- clusGap(dat, kmeans, K.max=15, B = 500, verbose = interactive())
+gap_clust
+
+library(factoextra)
+fviz_gap_stat(gap_clust)
+```
+
+可以看到也是在聚类数为3的时候gap值取到了最大值，所以最佳聚类数为3
+
+
+
+
+# 11. 层次聚类 hclust
+层次聚类是通过可视化然后人为去判断大致聚为几类，很明显在共同父节点的一颗子树可以被聚类为一个类
+```{r, fig.width=4, fig.height=4}
+h_dist <- dist(as.matrix(dat), method = "euclidean")
+h_clust<-hclust(h_dist, method="ward.D2")
+
+par(mar=c(5,4,2,1))
+plot(h_clust, hang = -1, labels = FALSE)
+rect.hclust(h_clust,3)
+```
+
+
+# 12. clustergram
+最后一种算法是Tal Galili[10]大牛自己定义的一种聚类可视化的展示，绘制随着聚类数目的增加，所有成员是如何分配到各个类别的。该代码没有被制作成R包，可以去Galili介绍页面)里面的 [github地址](https://github.com/talgalili/R-code-snippets) 找到源代码跑一遍然后就可以用这个函数了，因为源代码有点长我就不放博客里面了，
+
+```
+# https://clustergram.readthedocs.io/en/stable/
+# https://github.com/martinfleis/clustergram
+
+# https://www.r-statistics.com/2010/06/clustergram-visualization-and-diagnostics-for-cluster-analysis-r-code/
+# https://github.com/talgalili/R-code-snippets/blob/master/clustergram.r
+
+#source("https://www.r-statistics.com/wp-content/uploads/2012/01/source_https.r.txt")
+#source_https("https://raw.github.com/talgalili/R-code-snippets/master/clustergram.r")
+```
+
+```{r, include=FALSE}
+# 这部分源码不显示
+clustergram.kmeans <- function(Data, k, ...)
+{
+	# this is the type of function that the clustergram
+	# 	function takes for the clustering.
+	# 	using similar structure will allow implementation of different clustering algorithms
+ 
+	#	It returns a list with two elements:
+	#	cluster = a vector of length of n (the number of subjects/items)
+	#				indicating to which cluster each item belongs.
+	#	centers = a k dimensional vector.  Each element is 1 number that represent that cluster
+	#				In our case, we are using the weighted mean of the cluster dimensions by 
+	#				Using the first component (loading) of the PCA of the Data.
+ 
+	cl <- kmeans(Data, k,...)
+ 
+	cluster <- cl$cluster
+	centers <- cl$centers %*% princomp(Data)$loadings[,1]	# 1 number per center
+												# here we are using the weighted mean for each
+ 
+	return(list(
+				cluster = cluster,
+				centers = centers
+			))
+}		
+ 
+clustergram.plot.matlines <- function(X,Y, k.range, 
+											x.range, y.range , COL, 
+											add.center.points , centers.points)
+	{
+		plot(0,0, col = "white", xlim = x.range, ylim = y.range,
+			axes = F,
+			xlab = "Number of clusters (k)", ylab = "PCA weighted Mean of the clusters", main = c("Clustergram of the PCA-weighted Mean of" ,"the clusters k-mean clusters vs number of clusters (k)"))
+		axis(side =1, at = k.range)
+		axis(side =2)
+		abline(v = k.range, col = "grey")
+ 
+		matlines(t(X), t(Y), pch = 19, col = COL, lty = 1, lwd = 1.5)
+ 
+		if(add.center.points)
+		{
+			require(plyr)
+ 
+			xx <- ldply(centers.points, rbind)
+			points(xx$y~xx$x, pch = 19, col = "red", cex = 1.3)
+ 
+			# add points	
+			# temp <- l_ply(centers.points, function(xx) {
+									# with(xx,points(y~x, pch = 19, col = "red", cex = 1.3))
+									# points(xx$y~xx$x, pch = 19, col = "red", cex = 1.3)
+									# return(1)
+									# })
+						# We assign the lapply to a variable (temp) only to suppress the lapply "NULL" output
+		}	
+	}
+ 
+ 
+ 
+clustergram <- function(Data, k.range = 2:10 , 
+							clustering.function = clustergram.kmeans,
+							clustergram.plot = clustergram.plot.matlines, 
+							line.width = .004, add.center.points = T)
+{
+	# Data - should be a scales matrix.  Where each column belongs to a different dimension of the observations
+	# k.range - is a vector with the number of clusters to plot the clustergram for
+	# clustering.function - this is not really used, but offers a bases to later extend the function to other algorithms 
+	#			Although that would  more work on the code
+	# line.width - is the amount to lift each line in the plot so they won't superimpose eachother
+	# add.center.points - just assures that we want to plot points of the cluster means
+ 
+	n <- dim(Data)[1]
+ 
+	PCA.1 <- Data %*% princomp(Data)$loadings[,1]	# first principal component of our data
+ 
+	if(require(colorspace)) {
+			COL <- heat_hcl(n)[order(PCA.1)]	# line colors
+		} else {
+			COL <- rainbow(n)[order(PCA.1)]	# line colors
+			warning('Please consider installing the package "colorspace" for prittier colors')
+		}
+ 
+	line.width <- rep(line.width, n)
+ 
+	Y <- NULL	# Y matrix
+	X <- NULL	# X matrix
+ 
+	centers.points <- list()
+ 
+	for(k in k.range)
+	{
+		k.clusters <- clustering.function(Data, k)
+ 
+		clusters.vec <- k.clusters$cluster
+			# the.centers <- apply(cl$centers,1, mean)
+		the.centers <- k.clusters$centers 
+ 
+		noise <- unlist(tapply(line.width, clusters.vec, cumsum))[order(seq_along(clusters.vec)[order(clusters.vec)])]	
+		# noise <- noise - mean(range(noise))
+		y <- the.centers[clusters.vec] + noise
+		Y <- cbind(Y, y)
+		x <- rep(k, length(y))
+		X <- cbind(X, x)
+ 
+		centers.points[[k]] <- data.frame(y = the.centers , x = rep(k , k))	
+	#	points(the.centers ~ rep(k , k), pch = 19, col = "red", cex = 1.5)
+	}
+ 
+ 
+	x.range <- range(k.range)
+	y.range <- range(PCA.1)
+ 
+	clustergram.plot(X,Y, k.range, 
+											x.range, y.range , COL, 
+											add.center.points , centers.points)
+ 
+ 
+}
+```
+
+
+```{r, fig.width=6, fig.height=5}
+par(cex.lab = 1.5, cex.main = 1.2)
+set.seed(2023)
+clustergram(as.matrix(dat), k.range = 2:8, line.width = 0.004)
+```
+
+随着K的增加，从最开始的两类到最后的八类，图肯定是越到后面越密集。
+
+通过这个图判断最佳聚类数目的方法应该是看随着K每增加1，分出来的线越少说明在该k值下越稳定。比如k=7到k=8，假设k=7是很好的聚类数，那分成8类时应该可能只是某一类分成了两类，其他6类都没怎么变。反应到图中应该是有6簇平行线，有一簇分成了两股，而现在可以看到从7到8，线完全乱了，说明k=7时效果并不好。
+
+按照这个分析，k=3到k=4时，第一股和第三股几本没变，就第二股拆成了2类，所以k=3是最佳聚类数目
+
+
+
+
+
+
+
+
+
+# 方法汇总与比
+
+wine数据集我们知道其实是分为3类的，以上10种判定方法中：
+
+- 层次聚类和clustergram方法、肘点图法，需要人工判定，虽然可以得出大致的最佳聚类数，但算法本身不会给出最佳聚类数
+- 除了Affinity propagation (AP) clustering 给出最佳聚类数为15，剩下6种全都是给出最佳聚类数为3
+
+
+选用上次文本挖掘的矩阵进行分析(667*1623)
+
+- mclust效果很差，14种模型只有6种有结果
+- bclust报错
+- SSE可以运行
+- fpc包中的pamk函数聚成2类，明显不行
+- Calinsky criterion聚成2类
+- Affinity propagation (AP) clustering 聚成28类，相对靠谱
+- 轮廓系数Average silhouette聚类2类
+- gap-Statistic跑不出结果
+
+可见上述方法中有的因为数据太大不能运行，有的结果很明显不对，一个可能是数据集的本身的原因（缺失值太多等），但是也告诉了我们在确定最佳聚类数目的时候需要多尝试几种方法，并没有固定的套路，然后选择一种可信度较高的聚类数目。
+
+最后再把这10种方法总结一下：
+
+
+|方法 | 优点 | 缺点 |
+|:----:|:----:|:----|
+|mclust包 |傻瓜式，强大 | 复杂度大|
+|Nbclust包 | 傻瓜式，强大 | 复杂度大 |
+| WSSE 组内平方和误差肘点图 | 算法简单，复杂度小 | 不是很准|
+| Calinsky criterion | 比 WSSE 考虑更全面 | 复杂度高 |
+|轮廓系数Average silhouette method | 比 WSSE考虑更全面| |
+| Gap Statistic | 判定效果更好 | 复杂度高 |
+|PAM(Partitioning Around Medoids)围绕中心点的分割算法| 对 kmeans 的改进| |
+| Affinity propagation (AP) clustering | 热力图 | |
+|clustergram | 可视化 | 无量化指标判断|
+|层次聚类 | 可视化 | 无量化指标判断|
+
+
+
+
+
+# 参考资料
+
+1. R语言实战第二版
+2. Partitioning cluster analysis: Quick start guide - Unsupervised Machine Learning
+3. BIC：http://www.stat.washington.edu/raftery/Research/PDF/fraley1998.pdf
+4. Cluster analysis in R: determine the optimal number of clusters
+5. Calinski-Harabasz Criterion：Calinski-Harabasz criterion clustering evaluation object
+6. Determining the optimal number of clusters: 3 must known methods - Unsupervised Machine Learning
+7. affinity-propagation：聚类算法Affinity Propagation(AP)
+8. 轮廓系数https://en.wikipedia.org/wiki/Silhouette(clustering))
+9. gap statistic-Tibshirani R, Walther G, Hastie T. Estimating the number of clusters in a data set via the gap statistic[J]. Journal of the Royal Statistical Society: Series B (Statistical Methodology), 2001, 63(2): 411-423.
+10. ClustergramsClustergram: visualization and diagnostics for cluster analysis (R code)
+
+- https://zhuanlan.zhihu.com/p/24546995
+- https://www.codenong.com/15376075/
+- https://stackoverflow.com/questions/15376075/cluster-analysis-in-r-determine-the-optimal-number-of-clusters
+
+> I found the function `pamk` in `fpc` package to be most useful for my requirements.
