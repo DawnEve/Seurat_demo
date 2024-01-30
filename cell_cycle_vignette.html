@@ -218,7 +218,8 @@ marrow &lt;- ScaleData(marrow, features = rownames(marrow))</code></pre>
 <h1>Assign Cell-Cycle Scores</h1>
 <p>First, we assign each cell a score, based on its expression of G2/M and S phase markers. These marker sets should be anticorrelated in their expression levels, and cells expressing neither are likely not cycling and in G1 phase.</p>
 <p>We assign scores in the <code>CellCycleScoring()</code> function, which stores S and G2/M scores in object meta data, along with the predicted classification of each cell in either G2M, S or G1 phase. <code>CellCycleScoring()</code> can also set the identity of the Seurat object to the cell-cycle phase by passing <code>set.ident = TRUE</code> (the original identities are stored as <code>old.ident</code>). Please note that Seurat does not use the discrete classifications (G2M/G1/S) in downstream cell cycle regression. Instead, it uses the quantitative scores for G2M and S phase. However, we provide our predicted classifications in case they are of interest.</p>
-<pre class="r"><code>marrow &lt;- CellCycleScoring(marrow, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+<pre class="r"><code># scObj2b_2 = CellCycleScoring(scObj2b_2, s.features = cc.genes$s.genes, g2m.features = cc.genes$g2m.genes, set.ident = TRUE)
+marrow &lt;- CellCycleScoring(marrow, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
 
 # view cell cycle scores and phase assignments
 head(marrow[[]])</code></pre>
