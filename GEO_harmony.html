@@ -1,0 +1,756 @@
+<meta charset="utf-8">
+
+<style>
+pre{
+	word-wrap: break-word!important; 
+	white-space: pre-wrap;
+	padding: 0 10px;
+}
+
+</style>
+
+
+<pre>
+# Aim: load data from GEO, use Harmony instead PC to do follow steps
+
+setwd("/home/wangjl/data/project/outsource/shenwh/")
+getwd()
+
+outputRoot=""
+
+library(Seurat)
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+
+obj=read.table("GSE181919_UMI_counts.txt")
+dim(obj) #20000 54239
+obj[1:4, 1:4]
+
+
+colnames(obj)=sub("\\.", "-", colnames(obj) )
+obj[1:4, 1:4]
+
+
+meta =read.table("GSE181919_Barcode_metadata.txt")
+dim(meta) #54239     8
+meta[1:4, ]
+
+scObj <- CreateSeuratObject(counts = obj, project = "HNSCC", 
+                            min.cells = 3, min.features = 200,
+                            meta.data = meta)
+scObj
+#rm(obj)
+gc()
+
+
+head( rownames( scObj@meta.data) )
+head( colnames(scObj@assays$RNA@counts) )
+head( scObj@meta.data)
+
+
+dim(scObj@assays$RNA@data) #20000 54239
+dim(scObj@assays$RNA@data)
+
+
+
+scObj[["percent.mt"]] <- PercentageFeatureSet(scObj, pattern = "^MT-")
+VlnPlot(scObj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), ncol = 3, pt.size=0)
+
+
+plot1 <- FeatureScatter(scObj, feature1 = "nCount_RNA", feature2 = "percent.mt")
+plot2 <- FeatureScatter(scObj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
+plot1 + plot2
+
+
+#DimPlot(scObj)
+
+scObj <- NormalizeData(scObj, normalization.method = "LogNormalize", scale.factor = 10000)
+scObj <- FindVariableFeatures(scObj, selection.method = "vst", nfeatures = 2000)
+all.genes <- rownames(scObj)
+scObj <- ScaleData(scObj, features = all.genes)
+
+
+
+
+# Harmony ----
+# install.packages("harmony")
+library( harmony )
+
+# 代替PC，用于后续
+scObj = RunHarmony(scObj, "sample.id", plot_convergence = TRUE)
+scObj@reductions$harmony[1:10, 1:5]
+
+#细胞的嵌入
+harmony_embeddings <- Embeddings(scObj, 'harmony')
+harmony_embeddings[1:5, 1:5]
+
+
+
+# PCA(use harmony instead) ----
+scObj <- RunPCA(scObj, features = VariableFeatures(object = scObj))
+DimPlot(scObj, reduction = "pca")
+
+ElbowPlot(scObj, ndims = 50)
+
+
+
+
+
+# umap ----
+scObj <- RunUMAP(scObj, dims = 1:50, reduction = "harmony")
+
+
+DimPlot(scObj, reduction = "umap", label = T, group.by = "patient.id")
+
+
+# Cell cluster ----
+scObj <- FindNeighbors(scObj, dims = 1:50, reduction = "harmony")
+scObj <- FindClusters(scObj, resolution = 0.2)
+
+DimPlot(scObj, reduction = "umap", label = T)
+
+DimPlot(scObj, reduction = "umap", label = T, group.by = "cell.type")
+
+table(scObj$sample.id)
+table(scObj$patient.id)
+table(scObj$subsite)
+
+table(scObj$seurat_clusters, scObj$cell.type)
+
+head(colnames(scObj))
+head(rownames(meta))
+table( colnames(scObj) == rownames(meta) )
+
+table(meta$cell.type)
+
+
+# marker ----
+
+## manual ----
+markers=list(
+  malignant=c('KRT14', 'KRT17', 'KRT6A', 'KRT5', 'KRT19', 'KRT8', 'KRT16', 'KRT18', 'KRT6B', 'KRT15', 'KRT6C', 'KRTCAP3', 'EPCAM', 'SFN'), 
+  fibroblasts=c('FAP', 'PDPN', 'COL1A2', 'DCN', 'COL3A1', 'COL6A1'), 
+  myocytes=c('ACTA1', 'ACTN2', 'MYL2', 'MYH2'), 
+  T =c('CD2', 'CD3D', 'CD3E', 'CD3G', 'CD4', 'CD8A', 'CD8B', 'FOXP3'),
+  NK=c('NKG7', 'GNLY', 'GZMA', 'GZMB'),
+  B_Plasma = c( 'CD79A', 'CD79B', 'CD19', 'MS4A1', 'SDC1',
+               'SLAMF7','BLNK', 'FCRL5'), 
+  mono=c('CD14', "FCGR3A"),
+  macrophages=c('CD163', 'CD68', 'FCGR2A', 'CSF1R'), 
+  dendritic=c('ITGAX','CD40', 'CD80', 'CD83', 'CCR7'), 
+  mast = c('CMA1', 'MS4A2', 'TPSAB1', 'TPSB2'),
+  endothelial =c('PECAM1', 'VWF', 'ENG'),
+  cycle=c('MKI67', 'CCND1', 'CCND3', 'CCNE1', #'CCNE2', 
+          'CCNB1', 'CCNB2'),
+  'APA' =c("SCCPDH", 'NUDT21', "CPSF6"),
+  stem=c('CD34','SOCS2', 'SOCS1'),
+  meta=c("GAPDH", 'ACTB')
+)
+DotPlot(scObj, features = markers, cluster.idents = T) + RotatedAxis()
+DotPlot(scObj, features = markers, group.by = "cell.type") + RotatedAxis()
+
+DotPlot(scObj, features = unique(c(
+  'NUDT21', 'SCCPDH', 'GRB10', "UBFD1", "IFT20", "NUTF2", "CD59", "SFT2D1", 
+  "BLOC1S5",  "MAP2", "CDKN2B", "KRAS",  
+  'CD34', 'SOCS2',
+  c('CD2', 'CD3D', 'CD3E', 'CD3G', 'CD4', 'CD8A', 'CD8B'), #T
+  'KRT19', 'KRT8', 'KRT16', 'KRT18', #epithelial
+  
+  grep("^CPSF", rownames(scObj), value=T),
+  grep("^CSTF", rownames(scObj), value=T),
+  grep("^GZM", rownames(scObj), value=T),
+  grep("^CCN", rownames(scObj), value=T),
+  #grep("^SOCS", rownames(scObj), value=T),
+  #grep("^IGH", rownames(scObj), value=T),
+"GAPDH")), cluster.idents = T) + RotatedAxis()
+
+FeaturePlot(scObj, features = c("NUDT21", 'CPSF6', 'SCCPDH', 'MKI67', 'CD34', 'SOCS2'),
+            cols = c('lightgrey', 'red'), pt.size = 0.1, ncol=3) & NoLegend()
+
+table(scObj$cell.type)
+
+
+tmp=FindMarkers(scObj, ident.1 = "Malignant.cells", ident.2 = "Epithelial.cells",
+            group.by = "cell.type")
+
+DotPlot(scObj, features = unique(
+  tmp %>% filter(p_val_adj<0.05) %>% top_n(n = 20, wt = avg_log2FC) %>%
+    rownames()
+), cluster.idents = T) + RotatedAxis()
+
+VlnPlot(scObj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), 
+        ncol = 1, pt.size=0)
+
+DotPlot(scObj, features = c("CD79A", 
+                                grep("^IG", rownames(scObj), value=T)))+RotatedAxis()
+FeaturePlot(scObj, features = c("CD79A",  "IGHG4", "IGLC7"          ))+RotatedAxis()
+
+
+DotPlot(scObj, features =c("CD34", 'NUDT21', 'SCCPDH', 'CCNB1'), 
+        
+        split.by = "tissue.type") + RotatedAxis()
+
+scObj$tissue.type=factor(scObj$tissue.type, 
+                         levels = c("NL", "LP",  'CA',    'LN'))
+DotPlot(scObj, features = unique(c(
+  "CD34", 'NUDT21', 'SCCPDH', 'CCNB1',
+  "MKI67", "CCNB2", "CCNE1",
+  unlist(markers)
+)), cluster.idents = F, 
+split.by = "tissue.type", cols = c("red", 'orange', "green", 'blue')
+)+RotatedAxis() + ggtitle("among 4 tissue types") + ggplot2::coord_flip()
+ggsave("a1.scObj-by-tissue.sample.Seurat.dotplot.pdf", width=16, height=15)
+
+
+## auto marker (30min) ----
+
+
+
+
+### (2c) T cell markers ----
+scObj.markers.T <- FindMarkers(scObj, ident.1 = "T.cells",group.by = "cell.type",
+                               only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+write.table(scObj.markers.T, "a1.scObj-by-cluster.T-marker.txt")
+DotPlot(scObj, features = unique(c(
+  c("PTPRC", "CD3D", "CD3E", "CD3G", "CD4", "CD8A", "CD8B", 'FOXP3', "CD274", "GAPDH"),
+  scObj.markers.T |>  filter(p_val_adj<0.05) %>% top_n(n = 800, wt = avg_log2FC) |> 
+    rownames() |> head(100)
+)), cols = c("lightgrey", "red"), cluster.idents = T ) + RotatedAxis()+
+  ggtitle("T markers among all cells") + coord_flip()
+ggsave("a1.scObj-by-cluster.T-marker.Seurat.dotplot.pdf", width=7.5, height=20)
+
+DoHeatmap(scObj, features = scObj.markers.T |>  filter(p_val_adj<0.05) |> rownames() )
+
+
+
+
+# find markers for every cluster compared to all remaining cells, report only the positive ones
+scObj.markers <- FindAllMarkers(scObj, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+scObj.markers %>% group_by(cluster) %>% top_n(n = 2, wt = avg_log2FC)
+
+
+ c("SCCPDH", "MSL1",
+  "CD34","KIT", "CD38", "SOCS2","GATA1",
+  "MKI67","CCNE1", "CCNE2",
+  "NUDT21", "CPSF6",
+  "GAPDH",
+  
+  "PTPRC", "CD3D", "CD3E", "CD4", 'CD8A', 'CD8B',
+  'CD79A', 'CD79B', 'IGHG4',
+  'NKG7', 'GNLY', 
+  "CD14", "FCGR3A",
+  'C1QB')
+DotPlot(scObj, features = unique(c( 
+  #sapply(c("Fcer1a", "Itgb7", "Fcer1g", "Cpa3","Mcpt8", "Csf1"),toupper),
+  #"EPCAM", 'KRT8', 'KRT18', 'KRT19', 'KRT5', 'KRT15', 
+  #"CD3D", "CD3E", "CD4", "CD8A", "CD8B", "SELL",
+  #"NOS2","IRF5","PTGS2", "CD163", "VSIG4", "MS4A4A", "ARG2",
+  scObj.markers %>% group_by(cluster) %>%
+    filter(cluster %in% c(15) ) %>%  #by cluster
+    top_n(n = 70, wt = avg_log2FC) %>% #arrange( desc(pct.1) ) %>%
+    pull("gene") %>% unique() %>% jsonlite::toJSON()
+)), cluster.idents = T, cols=c('lightgrey', "red")) + RotatedAxis()+
+  ggtitle("Myocyte")
+#ggsave("a1.scObj.Seurat.dotplot.pdf", width=30, height=5.5)
+
+grep("^PABP", rownames(scObj), value=T)
+grep("^PAPOL", rownames(scObj), value=T)
+DotPlot(scObj, features = unique(c(
+  #"EPB41", "EPB41L2", "EPB41L3",
+  #"CD274", 'LAG3',
+  "SCCPDH",
+  "NUDT21", 'CPSF6','CSTF2', 'FIP1L1', 'PAPOLA',
+  'XBP1', 'GPX1', 'FLT3', 'PIM1', 'MYC', 'HOXA9', 'BMI1',
+  #"CD79A", "CD79B", "MS4A1", "CD19",   "VPREB3",
+  #"NOS2","IRF5","PTGS2", "CD163", "VSIG4", "MS4A4A",
+  "FLT3", "CD34",'RUNX1', 'RUNX1T1'
+  #sapply(
+  #  #c("Bcl2","Rgs1","Xcl1","Dusp2","Sh2d2a","S100a10","Cd2","Ugcg","Lck","Txk","Vps37b","Gimap4","Gimap5","Klrb1a","Klrb1c","Klre1","Klrd1","Klrk1","Klrc2","Klri2","Klra4","Klra8","Klra9","Klra7","Klra3","Ncr1","Nkg7","Ifngr1","Prf1","Ifng","Gzmb","Eomes","Ccl5","Ccl3","Ccl4","Cd7","Serpinb6b","Serpinb9","Ctla2a","Gzma","Id2","Il2rb","Lgals1","Sytl3","H2-K1","H2-Q7","Ctsw","Ahnak","AW112010","Ms4a4b"),
+  #  c("Fn1","Dbi","Vim","Zeb2","Cst3","Mafb","Ctsz","Psma7","Anxa5","S100a4","Ctss","Klf4","Prdx1","Sdc3","Plac8","Rassf4","Clec4a1","Clec4a3","Apoe","Ctsc","Ifitm3","Smpdl3a","Psap","Lyz2","Lrp1","Lamp1","Hpgd","Lpl","Hmox1","Lgals3","Ctsb","Trf","Ccr2","Cd68","Ccl9","Gngt2","Grn","F13a1","Npc2","Lgmn","Pld4","Crip1","Selenop","Lgals1","Aif1","Csf1r","Ahnak","Ms4a4c","Ms4a6c","Mpeg1"),
+  #  toupper)
+  #intersect(t1,t2),
+  #setdiff(t1, t2), 
+  #setdiff(t2, t1)
+)), cluster.idents = T, cols=c('lightgrey', "red")) + RotatedAxis()#+
+  ggtitle("mono")
+
+FeaturePlot(scObj, features = c(
+  "NOS2","IRF5","PTGS2", "CD163", "VSIG4", "MS4A4A"
+), ncol=3, cols=c('lightgrey', "red")) & NoLegend()
+
+
+### (100a)apa factors ----
+apa_factors=list(
+  CPSF=c("CPSF1","CPSF2","CPSF3", "CPSF3L", "CPSF4","CPSF4L","CPSF6","CPSF7"),
+  CSTF=c("CSTF1","CSTF2","CSTF2T","CSTF3"),
+  PABP=c("PABPC1","PABPC1L","PABPC3","PABPC4","PABPC4L","PABPC5","PABPN1"),
+  PAPOL=c("PAPOLG", "PAPOLA"),
+  other=c("SYMPK", "RBBP6", "WDR33", "FIP1L1", "NUDT21","CLP1", "PCF11", "SCCPDH")     #无法归类
+)
+
+
+
+
+### gene mean exp of core factors in each cluster ----
+apa_exp_data = AverageExpression(scObj, features = unlist(apa_factors), slot="data", 
+                                 group.by = "seurat_clusters")
+apa_exp_data=apa_exp_data$RNA
+apa_exp_data[1:4,1:4]
+# rm all 0 rows
+apa_exp_data=apa_exp_data[rowSums(apa_exp_data)>0,]
+dim(apa_exp_data)
+
+library(pheatmap)
+pic1 = pheatmap(log1p(apa_exp_data),
+         border_color = NA,
+         scale = "row",
+         clustering_method = 'ward.D2',
+         #filename = "a10_apa_factors_HNSCC.heatmap.pdf", width = 5, height = 4.8,
+         main="APA core factors in HNSCC")
+#
+
+
+## save Or load ----
+# saveRDS(scObj, file = "data/scObj.Seurat.rds")
+# scObj =readRDS(file = "data/scObj.Seurat.rds")
+write.table(scObj.markers, "data/scObj.markers.txt")
+# scObj.markers=read.table("data/scObj.markers.txt")
+
+table(scObj$seurat_clusters)
+scObj_down=subset(scObj, downsample=2000)
+table(scObj_down$seurat_clusters)
+DoHeatmap(scObj_down, 
+          #features = unlist(apa_factors), 
+          features = pic1$tree_row$labels[pic1$tree_row$order], 
+          group.by = "seurat_clusters" )+
+  ggtitle("version:1146")
+#
+
+
+
+
+#1. Macrophage(cluster4): normal -> leukoplakia -> primary-> metastasis ----
+## (1) get macrophage cell
+sc_sub = subset(scObj, idents=4)
+sc_sub = subset(sc_sub, UMAP_1<5 & UMAP_2<5 & UMAP_2>-10)
+sc_sub 
+DimPlot(sc_sub, label = T)
+
+table(sc_sub$tissue.type)
+# CA   LN   LP   NL 
+# 3361  659  514  694 
+sc_sub$tissue.type=factor(sc_sub$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+Idents(sc_sub)="tissue.type"
+markers.tissue = FindAllMarkers(sc_sub, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10 <- markers.tissue %>% group_by(cluster) %>% top_n(n = 30, wt = avg_log2FC)
+#DoHeatmap(sc_sub, features = unique(top10$gene), label = FALSE) +  #+ NoLegend()
+#  scale_fill_gradientn(colors = c("blue", "white", "red"))+ggtitle("Macrophage")
+
+DotPlot(sc_sub, features = unique(top10$gene), cols = c('lightgrey', 'red')) + 
+  RotatedAxis() +  ggtitle("Macrophage cells")
+write.table(markers.tissue, "a1.scObj-by-tissue.Marcrophage-DEG.txt")
+
+
+
+#2. Epithelial(cluster3): normal -> leukoplakia -> primary-> metastasis ----
+## (1) get macrophage cell
+sc_sub3 = subset(scObj, idents=3)
+sc_sub3 = subset(sc_sub3, UMAP_1<5 & UMAP_2< (-7) )
+sc_sub3 
+DimPlot(sc_sub3, label = T)
+
+#table(sc_sub$tissue.type)
+# CA   LN   LP   NL 
+# 3366  659  514  694 
+# 3361  659  514  694 after trim
+sc_sub3$tissue.type=factor(sc_sub3$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub3, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+Idents(sc_sub3)="tissue.type"
+markers.tissue3 = FindAllMarkers(sc_sub3, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_3 <- markers.tissue3 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+DoHeatmap(sc_sub3, features = unique(top10_3$gene), label = FALSE) +  #+ NoLegend()
+  scale_fill_gradientn(colors = c("blue", "white", "red"))+ggtitle("Epithelial")
+
+
+
+
+
+#3. fibro (cluster0) ----
+## (1) get macrophage cell
+sc_sub3 = subset(scObj, idents=3)
+sc_sub3 = subset(sc_sub3, UMAP_1<5 & UMAP_2< (-7) )
+sc_sub3 
+DimPlot(sc_sub3, label = T)
+
+#table(sc_sub3$tissue.type)
+# CA   LN   LP   NL 
+# 100  162 5204  245 
+sc_sub3$tissue.type=factor(sc_sub3$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub3, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+Idents(sc_sub3)="tissue.type"
+markers.tissue3 = FindAllMarkers(sc_sub3, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_3 <- markers.tissue3 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+DoHeatmap(sc_sub3, features = unique(top10_3$gene), label = FALSE) +  #+ NoLegend()
+  scale_fill_gradientn(colors = c("blue", "white", "red"))+ggtitle("Epithelial")
+
+DotPlot(sc_sub3, features = unique(top10_3$gene)) + RotatedAxis()+
+  ggtitle("Epithelial cells")
+
+
+
+
+#4. T cells(1,2,8) ----
+FeaturePlot(scObj, features = c('PTPRC',"CD3D", "CD3E", 'CD3G', 'CD4', 'CD8A', 'CD8B', 
+                                'GZMA', 'GZMB', 'GZMK', 'GZMH', "CD274"),
+            cols = c('lightgrey', 'red'))&NoLegend()
+
+
+## (1) get the cell
+sc_sub4 = subset(scObj, idents=c(1,2,8) )
+sc_sub4 = subset(sc_sub4, UMAP_1< (-2) & UMAP_2< (6) & UMAP_2> (-8) )
+sc_sub4
+DimPlot(sc_sub4, label = T)
+
+table(sc_sub4$tissue.type)
+# CA   LN   LP   NL 
+#4138 1398 7601 4661 
+sc_sub4$tissue.type=factor(sc_sub4$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub4, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+Idents(sc_sub4)="tissue.type"
+markers.tissue4 = FindAllMarkers(sc_sub4, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_4 <- markers.tissue4 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+DoHeatmap(sc_sub4, features = unique(top10_4$gene), label = FALSE) +  #+ NoLegend()
+  scale_fill_gradientn(colors = c("blue", "white", "red"))+ggtitle("T cells")
+ggsave( paste0(outputRoot, "04_heatmap.tissule.T.pdf"), width=4, height=9.5, useDingbats = F)
+
+DotPlot(sc_sub4, features = unique(top10_4$gene)) + RotatedAxis()+
+  ggtitle("T cells")
+
+# barplot
+tbl_dat=table(sc_sub4$tissue.type, sc_sub4$seurat_clusters);tbl_dat
+tbl_dat=tbl_dat[, colSums(tbl_dat)>0]
+colors = c("blue", "orange", "red", "pink")
+barplot(tbl_dat, col =colors , main="Cell number in each cluster")
+legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+#
+barplot(apply(tbl_dat, 2, function(x){x/sum(x)}), col =colors , main="Cell number in each cluster")
+#legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+
+
+
+## (1c). DEG along cell.type ----
+markers.tissue4 %>% filter(p_val_adj<0.05) %>% dim() #591   7
+
+tmp1=markers.tissue4 %>% filter(p_val_adj<0.05) %>% 
+  group_by(cluster) %>% top_n(n = 200, wt = avg_log2FC)
+
+tmp1 |> dim()
+DotPlot(sc_sub4, features = unique(tmp1$gene)[1:30] ) + RotatedAxis()+
+  ggtitle("T cells")
+# mean expression level
+scObj_T.marksers = as.data.frame(AverageExpression(sc_sub4, group.by = "tissue.type" )$RNA)
+scObj_T.marksers=scObj_T.marksers[order(-scObj_T.marksers$LN),]
+
+
+head(scObj_T.marksers)
+
+scObj_T.increase = (function(){
+  result=c()
+  len = nrow(scObj_T.marksers)
+  for(i in 1:len){
+    line = scObj_T.marksers[i, , drop=F]
+    if(line[1,1]<=line[1,2] & line[1,2]<=line[1,3] & line[1,3]<=line[1,4]){
+      result =c(result, rownames(line))
+    }
+  }
+  print(length(result))
+  result
+})()
+# 
+#scObj_T.increase |> jsonlite::toJSON() #2734
+# ["HES4","ISG15","FAM132A","UBE2J2","PUSL1","CPTP","AURKAIP1","MRPL20","SSU72"] 
+
+# overlap
+scObj.markers_ol = intersect(scObj_T.increase, tmp1$gene)
+length(scObj.markers_ol) #118
+length(unique(scObj.markers_ol)) #118
+scObj.markers_ol |> jsonlite::toJSON()
+#
+DotPlot(sc_sub4, features = scObj.markers_ol[1:60], cols = c("lightgrey", "red") ) + RotatedAxis()+
+  ggtitle("T cells: 1-60 increase genes")
+
+DotPlot(sc_sub4, features = scObj.markers_ol[61:118], cols = c("lightgrey", "red") ) + RotatedAxis()+
+  ggtitle("T cells: 61-118 increase genes")
+
+
+
+#5. CD8+ T cells(2,8) ----
+FeaturePlot(scObj, features = c('PTPRC',"CD3D", "CD3E", 'CD3G', 'CD4', 'CD8A', 'CD8B', 
+                                'GZMA', 'GZMB', 'GZMK', 'GZMH', "CD274"),
+            cols = c('lightgrey', 'red'))&NoLegend()
+
+
+## (1) get the cell
+sc_sub5 = subset(scObj, idents=c(2,8) )
+sc_sub5 = subset(sc_sub5, UMAP_1< (-2) & UMAP_2< (6) & UMAP_2> (-7) )
+sc_sub5
+DimPlot(sc_sub5, label = T)
+
+#table(sc_sub5$tissue.type)
+# CA   LN   LP   NL 
+#2153  616 4201 2707
+sc_sub5$tissue.type=factor(sc_sub5$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub5, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+Idents(sc_sub5)="tissue.type"
+markers.tissue5 = FindAllMarkers(sc_sub5, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_5 <- markers.tissue5 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+DoHeatmap(sc_sub5, features = unique(top10_4$gene), label = FALSE) +  #+ NoLegend()
+  scale_fill_gradientn(colors = c("blue", "white", "red"))+ggtitle("CD8+ T cells")
+#ggsave( paste0(outputRoot, "04_heatmap.tissule.T.pdf"), width=4, height=9.5, useDingbats = F)
+
+DotPlot(sc_sub5, features = unique(top10_5$gene)) + RotatedAxis()+
+  ggtitle("CD8+T cells")
+
+# barplot
+tbl_dat=table(sc_sub5$tissue.type, sc_sub5$seurat_clusters);tbl_dat
+tbl_dat=tbl_dat[, colSums(tbl_dat)>0]
+colors = c("blue", "orange", "red", "pink")
+barplot(tbl_dat, col =colors , main="Cell number in each cluster")
+legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+#
+barplot(apply(tbl_dat, 2, function(x){x/sum(x)}), col =colors , main="Cell number in each cluster")
+#legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+
+
+
+
+
+
+# 6. markers between T cells ----
+## (1) get the cell
+sc_sub6 = subset(scObj, idents=c(1, 2, 8) )
+sc_sub6 = subset(sc_sub6, UMAP_1< (-2) & UMAP_2< (6) & UMAP_2> (-7) )
+sc_sub6
+DimPlot(sc_sub6, label = T)
+
+#table(sc_sub6$tissue.type)
+# CA   LN   LP   NL 
+#4138 1398 7601 4661
+sc_sub6$tissue.type=factor(sc_sub6$tissue.type, levels = c("NL", "LP", 'CA', 'LN'))
+DimPlot(sc_sub6, label = F, split.by = "tissue.type")
+
+
+## (2) compare between group
+#Idents(sc_sub6)="tissue.type"
+markers.tissue6 = FindAllMarkers(sc_sub6, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+top10_6 <- markers.tissue6 %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC)
+
+# all T cells
+DotPlot(sc_sub6, features = unique(c(
+  "CD3D", "CD3E", "CD3G", "CD4", "CD8A", "CD8B", "FOXP3", 
+  top10_6$gene)
+)) + RotatedAxis()+ ggtitle("T cells")
+
+
+DotPlot(sc_sub6, features = unique(c(
+  "CD3D", "CD3E", "CD3G", "CD4", "CD8A", "CD8B", "FOXP3", 
+  top10_6$gene)
+), split.by = "tissue.type", 
+cols = c("red", "pink", "blue", "orange" )) + 
+  RotatedAxis()+ ggtitle("T cells, split.by=tissue.type")
+
+
+
+# all cells
+DotPlot(scObj, features = unique(c(
+  "CD3D", "CD3E", "CD3G", "CD4", "CD8A", "CD8B", "FOXP3", 
+  top10_6$gene)
+), cluster.idents = T) + RotatedAxis()+ ggtitle("All cells")
+
+
+
+## all cell barplot ----
+tbl_dat=table(scObj$cell.type, scObj$seurat_clusters);tbl_dat
+tbl_dat=tbl_dat[, colSums(tbl_dat)>0]
+colors =1:10 #c("blue", "orange", "red", "pink")
+barplot(tbl_dat, col =colors , main="Cell number in each cluster")
+legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+#
+barplot(apply(tbl_dat, 2, function(x){x/sum(x)}), col =colors , main="Cell number in each cluster")
+#legend("topright", legend = rownames(tbl_dat), fill =colors, border = NA,bty="n" )
+
+
+
+
+
+
+
+
+# 7. correlation & APA ----
+
+dat = FetchData(scObj, vars = c(
+  #"FOXP3", 'CD274'
+  "SCCPDH", "NUDT21"
+  ) )
+dat=dat[rowSums(dat)>0,]
+head(dat)
+sum(dat)
+
+dat[1:10, ]
+cor.test(dat[,1], dat[,2])
+
+grep("CD300", rownames(scObj), value=T)
+DotPlot(scObj, features = c("SCCPDH",
+                            "CD3D", "CD3E", "CD4","CD8A","CD8B", "NKG7", "GZMA", "GZMB", "CD79A", 
+                           
+                            "CD34", "SOCS2",
+                            "CD274", "LAG3", 'ICOS', "CTLA4", "TIGIT",
+                            #"FIP1L1", "CSTF2", "CPSF3", 'CPSF2', 'CSTF3', 
+                            #'NUDT21', 'CPSF6',
+                            "CSF1R","CD68", grep("CD300", rownames(scObj), value=T),
+                            #"MRPL45",
+                            "CCNE1",'CCNE2', 'CCNB1', "MKI67",
+                            "PCF11"
+                            #'GAPDH'
+                            ),
+        #split.by = "tissue.type", cols = c("red", 'orange', "green", 'blue'),
+        #group.by = "cell.type",
+        #group.by = "tissue.type",
+        group.by = "seurat_clusters",
+        cluster.idents = F)+RotatedAxis() + coord_flip()
+
+
+
+
+### (2)Re plot DotPlot ----
+
+# named color
+color.head=c('#617381', "#76AB9B", '#CE5A5B', "#EA7C5B");
+names(color.head) =c("NL", "LP", "CA", "LN")
+color.head
+# draw with Seurat
+g1=DotPlot(scObj, features = c("CD300LF"), group.by = "tissue.type", 
+        cluster.idents = F)+labs(x="", y="") + NoLegend(); g1 #+ #+RotatedAxis() #+ coord_flip()
+# >> get data from ggplot obj
+head(g1$data)
+#            avg.exp  pct.exp features.plot id avg.exp.scaled
+#CD300LF  0.04571820 4.370236       CD300LF CA      1.0291080
+#CD300LF1 0.03949094 4.144320       CD300LF LN      0.6632240
+# re-plot with ggplot2
+ggplot(g1$data, aes(x=features.plot, y=id, size=pct.exp, color=id))+
+  geom_point(show.legend = F)+
+  scale_color_manual(values=color.head)+
+  theme_classic(base_size = 14)+
+  labs(x="", y="")
+#
+  
+
+VlnPlot(scObj, features = c("CD34", "SCCPDH", "LAG3", 
+                            'NUDT21', 'CPSF6',"MKI67", 
+                            #"CCNE1",'CCNE2', 
+                            'CCNB1',  'SOCS2'),
+        ncol = 2, pt.size = 0)
+
+FeaturePlot(scObj, features = c("CD34", "SCCPDH", "NUDT21", "CPSF6", "MKI67", "CCNB1"), 
+            cols = c("lightgrey", 'red'), pt.size = 0.1) & NoLegend()
+
+sc_cluster8=subset(scObj, idents=8)
+sc_cluster8=subset(sc_cluster8, UMAP_1<(-2) & UMAP_2 <5 & UMAP_2> (-7))
+DimPlot(sc_cluster8)
+VlnPlot(sc_cluster8, features = c("SCCPDH", 'LAG3', 'NUDT21', 'MKI67'), 
+        group.by = "tissue.type", pt.size = 0, ncol = 1)
+
+
+
+### (3)Re plot half VlnPlot ----
+gene.symbol="PCF11"
+g2=VlnPlot(scObj, 
+           features = c(gene.symbol),
+           #features = c("CD68"), 
+        #group.by="tissue.type", 
+        group.by="cell.type", 
+        #cols = color.head,
+        pt.size=0)+RotatedAxis(); g2 #fig1
+#  scale_color_manual(color.head)
+head(g2$data)
+#                           PCF11 ident
+#AAACGGGCATGACGGA-1  1.370958e-05         T.cells
+#AAAGATGAGCAGACTG-1 -5.646982e-06         T.cells
+
+
+# BiocManager::install("gghalves")
+# options(BioC_mirror="https://mirrors.tuna.tsinghua.edu.cn/bioconductor") 
+# options("repos" = c(CRAN="https://mirrors.tuna.tsinghua.edu.cn/CRAN/"))
+library(gghalves)
+dat=data.frame(
+  ident=g2$data$ident,
+  value=g2$data[,1]
+)
+# rm 0 values?
+dim(dat)
+dat=dat[which(dat$value>1e-4),]
+dim(dat)
+ggplot(dat, aes(x = ident, y = value, fill = ident) )+
+  geom_jitter(size=0.1, color="grey80") +
+  geom_violin(trim=F, #末尾是否截断
+              aes(fill=ident), #填充颜色
+              scale="width", #默认是按面积 area，推荐改为width
+              bw=0.1)+ #取样宽度，越小越精细模拟原始值
+  geom_boxplot(width=0.1, fill="white", show.legend = F, 
+               outlier.colour = "#00000000") + #离群值 透明
+  theme_classic(base_size = 14)+
+  RotatedAxis()+
+  ggtitle(gene.symbol) #fig2
+#
+
+ggplot(dat, aes(x = ident, y = value, fill = ident) ) +
+  geom_half_point(size=0.1, side="l", aes(color=ident) )+
+  geom_half_violin(
+    aes(fill = ident),
+    alpha=0.7,
+    #position = position_nudge(x = .15, y = 0),
+    #adjust=0.5,
+    trim=F, 
+    colour=NA, #描边颜色
+    bw=0.1,
+    side = 'r',
+    show.legend = F
+  )+
+  geom_boxplot(width=0.1, fill="white", show.legend = F, 
+               outlier.colour = "#00000000") + #离群值 透明
+  #scale_fill_manual(values = color.head) +
+  #scale_color_manual(values = color.head) +
+  theme_classic(base_size = 14)+
+  RotatedAxis()+
+  labs(x="", y="log(Normalized counts +1)", title = bquote( italic(.(gene.symbol)) ) )+
+  guides(colour = guide_legend(override.aes = list(alpha = 1, size=3))) #fig3
+#
+#
+FeaturePlot(scObj, features = c("PCF11", "CD300LF", "CD274", "NUDT21", "CPSF6", "CPSF3"), 
+            ncol = 2,
+            cols =c("lightgrey", "red"), order=T)
+</pre>
