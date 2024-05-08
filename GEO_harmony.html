@@ -1,6 +1,9 @@
 <meta charset="utf-8">
-
+<title>GEO data & harmony</title>
 <style>
+/*
+v0.1 可用
+*/
 pre{
 	word-wrap: break-word!important; 
 	white-space: pre-wrap;
@@ -69,7 +72,7 @@ scObj <- NormalizeData(scObj, normalization.method = "LogNormalize", scale.facto
 scObj <- FindVariableFeatures(scObj, selection.method = "vst", nfeatures = 2000)
 all.genes <- rownames(scObj)
 scObj <- ScaleData(scObj, features = all.genes)
-
+scObj=RunPCA(scObj)
 
 
 

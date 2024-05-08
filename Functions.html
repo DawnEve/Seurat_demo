@@ -1,0 +1,72 @@
+<meta charset="utf-8">
+<title>Functions for scRNA-seq analysis and plot (Seurat)</title>
+<style>
+/*
+v0.1 add FeaturePlot2
+*/
+
+pre{
+	word-wrap: break-word!important; 
+	white-space: pre-wrap;
+	padding: 0 10px;
+}
+
+h2{
+	border-top: 2px solid black;
+	padding-left: 5px;
+	padding-bottom:0;
+	margin-bottom:0;
+	font-family:"微软雅黑"
+}
+
+.red{color:red;}
+
+</style>
+
+<h1>Functions for scRNA-seq analysis and plot (Seurat)</h1>
+
+<p>version
+<!--
+0.1 20240411 init single html version
+-->
+0.2 20240508 Add R file which can be used in R and shown on html directly
+</p>
+
+
+<pre>
+显示流程：
+- 代码读取自 <b class=red>code/Functions.R</b>
+- 代码中所有 &lt; 会被替换为 &amplt;
+- 代码中所有 ##{** xx **}## 会被替换为 html 二级标题 &lt;h2&gt; xx &lt;/h2&gt;
+
+- 建议：记录版本变更 编号和理由，R和本html的更新记录到各自文件顶部，html只显示最新记录。
+- 代码给出运行实例，加上if(0)防止载入时运行。
+</pre>
+
+
+
+<script>
+var xhr = new XMLHttpRequest();
+xhr.open('GET', 'code/Functions.R', true);
+xhr.onload = function() {
+  if (this.status == 200) {
+    var response = this.responseText;
+    // 替换字符串中的 '<' 字符
+    response = response.replace(/</g, '&lt;');
+    // 替换字符串 ##{**VolcanoPlot**}## 为 header 2
+    response = response.replace(/##\{\*\*/g, '<h2>');
+    response = response.replace(/\*\*\}##/g, '</h2>');
+	// insert to div
+	document.getElementById("code").innerHTML=response
+  }
+};
+xhr.send();
+</script>
+
+
+<hr>
+
+<pre>
+<div id=code></div>
+</pre>
+
