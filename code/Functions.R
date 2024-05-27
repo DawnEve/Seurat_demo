@@ -1,7 +1,28 @@
 # Aim: Functions useful for scRNA-seq analysis
+# ref: https://gitee.com/dawnEve/neu_colon/blob/master/base/functions.R
+
 if(0){
 	cat("v0.2 支持 html 二级标题，写法见下文")
 }
+
+
+##{**add QC**}##
+AddQC=function(obj){
+	obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^MT-")
+	obj[["percent.rp"]] <- PercentageFeatureSet(obj, pattern = "^RP[SL]")
+	obj[["percent.hb"]] <- PercentageFeatureSet(obj, pattern = "^HB[^(P)]")
+	obj
+}
+
+VlnPlot(obj, 
+        features = c("nFeature_RNA",
+                     "nCount_RNA", 
+                     "percent.mt",
+                     "percent.rp",
+                     "percent.hb"),
+        ncol = 3,pt.size = 0.1, group.by = "orig.ident")
+#
+
 
 
 

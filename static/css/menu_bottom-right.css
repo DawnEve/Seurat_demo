@@ -1,0 +1,53 @@
+/* menus of headers */
+
+#rightMenu::-webkit-scrollbar {display:none}
+#rightMenu{
+	position:fixed;
+	right:0;
+	bottom:0px;
+	border:2px solid #ccc;
+	border-right-width: 0;
+	border-bottom-width: 0;
+    opacity: 0.7;
+	border-top-left-radius: 10px;
+	/*
+	background:#0D2E4C;
+	color:#ccc;
+	border-bottom-left-radius: 20px;
+	max-width:300px;*/
+	overflow-x: hidden;
+	overflow-y: scroll;
+	
+	font-size: 14px;
+}
+#rightMenu ul{
+	opacity: 1;
+	padding:10px;
+	list-style: none;
+}
+
+#rightMenu ul li a{
+	text-decoration:none;
+	color:black;
+}
+
+#rightMenu ul li a:hover,
+#rightMenu ul li a.cur{
+	color:orange;
+}
+
+
+#cli_title{
+	width:300px;
+	height:30px;
+	line-height:30px;
+	float:left;
+	background:#E3E3E3; /*ac8932*/
+	text-align:left;
+	color:#6a737d;
+	/*border-radius:5px;*/
+	margin-bottom:10px;
+}
+#cli_title b{padding: 8px 10px; 
+	cursor:pointer;
+}

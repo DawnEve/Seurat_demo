@@ -11,17 +11,20 @@ v0.8 add cell marker of BMMC, PBMC from Azimuth References [2023.11.7]
 v0.9 fix text [2024.1.30]
 v0.9.1@picb add GEO data [2024.4.10]
 v0.9.2@picb R Functions v2 [2024.5.8]
+v0.9.3@picb R Functions v0.3 Add menu_bottom-right.css [2024.5.27]
 
 
 ## git commit 
 ### ==> git push origin main  :  https://github.com/dawneve/Seurat_demo
 
 
-
-path: /home/wangjl/html/index/Seurat_demo/
-source: $ cp ~/data/scScripts/backup/00/01.html sctransform.html
-local: http://y.biomooc.com:8080/index/Seurat_demo/
-WAN: http://seurat.biomooc.com/
+Y Ubuntu:
+	path: /home/wangjl/html/index/Seurat_demo/
+	source: $ cp ~/data/scScripts/backup/00/01.html sctransform.html
+Win11:
+	path: D:\xampp\htdocs\Seurat_demo\
+local: http://seurat.dawneve.cc
+WAN: http://seurat.biomooc.com
 
 
 
