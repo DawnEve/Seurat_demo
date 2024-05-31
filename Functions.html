@@ -37,8 +37,9 @@ h2{
 <!-- html
 0.1 20240411 init single html version
 0.2 20240508 Add R file which can be used in R and shown on html directly
--->
 0.3 20240527 Add menu_bottom-right.css
+-->
+0.4 20240531 create bottom right menu after loading R code
 </p>
 
 
@@ -122,24 +123,6 @@ function addEvent(obj,ev,fn){
 // global parameters here
 window.jslecture={
 };
-
-
-function loadCode(){
-	ajax('code/Functions.R', function(dat){
-		// 替换字符串中的 '<' 字符
-		dat = dat.replace(/</g, '&lt;'); //essential *
-		dat = dat.replace(/</g, '&gt;'); //optional
-		// 替换字符串 ##{**VolcanoPlot**}## 为 header 2
-		dat = dat.replace(/##\{\*\*/g, '<h2>');
-		dat = dat.replace(/\*\*\}##/g, '</h2>');
-		// insert to div
-		document.getElementById("main_code").innerHTML=dat
-	})
-}
-
-
-
-
 
 
 
@@ -255,15 +238,27 @@ var rightMenu_toggle=function(){
 } 
 
 
-
+function loadRCode(success){
+	ajax('code/Functions.R', function(dat){
+		// 替换字符串中的 '<' 字符
+		dat = dat.replace(/</g, '&lt;'); //essential *
+		dat = dat.replace(/</g, '&gt;'); //optional
+		// 替换字符串 ##{**VolcanoPlot**}## 为 header 2
+		dat = dat.replace(/##\{\*\*/g, '<h2>');
+		dat = dat.replace(/\*\*\}##/g, '</h2>');
+		// insert to div
+		document.getElementById("main_code").innerHTML=dat
+		
+		//加载完成后执行回调函数
+		success();
+	})
+}
 
 // add event one after another
 addEvent(window, "load", function(){
-	//0.加载代码
-	loadCode();
+	//加载R代码，传入(生成右下角目录的)回调函数
+	loadRCode(function(){
 
-	setTimeout(function(){
-	
 		//1.创建右侧菜单
 		createRightMenu();
 
@@ -276,9 +271,8 @@ addEvent(window, "load", function(){
 		//addEvent(window, "scroll", highlight_curent_munu);
 		window.addEventListener("scroll", highlight_curent_munu, false);
 		window.scrollBy(1, 1); //主动触发滚动，否则没有高亮	
-	}, 10)
+	})
 
-	
 }, false);
 
 
