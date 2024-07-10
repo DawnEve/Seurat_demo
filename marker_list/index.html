@@ -1,0 +1,58 @@
+<meta charset="utf8">
+<title>My marker gene list</title>
+
+
+
+<pre>
+markers=list(
+  epithelial=c(#'KRT14', 'KRT17', 'KRT6A', 'KRT5', 
+    'EPCAM', 'KRT8', 'KRT18','KRT19',  #'KRT16', 'KRT6B', 'KRT15', 'KRT6C', 'KRTCAP3', 
+    #'SFN', 'PROM1', 'ALDH1A1', 
+	'CD24'), 
+  fibro=c("MME",'FAP', 'PDPN', "VCAN", #'COL1A2', 'DCN', 'COL3A1', 
+	'COL6A1'),
+  endo =c('PECAM1', 'VWF', 'ENG'),
+  
+  #myocytes=c('ACTA1', 'ACTN2', 'MYL2', 'MYH2'), 
+  
+  "T" =c("PTPRC", #'CD2', 'TRAC','CD7', 
+		'CD3D', 'CD3E', #'CD3G', 
+		'CD4', 'CD8A', 'CD8B', 'SELL',
+         'FOXP3', "CTLA4", "CD274", "PRF1", "IFNG", "RUNX3", "ZBTB7B"),
+  NK=c('NKG7', 'GNLY', 'GZMA', 'GZMB', "GZMK", "GZMH","GZMM",
+  "NCAM1",  'FGFBP2', 'CX3CR1'),
+  B = c( 'CD79A', 'CD79B', 'CD19', 'MS4A1', 'VPREB3', 'SLAMF7','BLNK', 'FCRL5'), 
+  Plasma=c('IGHG1', 'MZB1', 'SDC1'),
+  mono=c('CD14', "FCGR3A"),
+  
+  macro=c('CD163', 'CD68', 'FCGR2A', 'CSF1R'), 
+  M1=c('NOS2', 'IRF5', 'PTGS2'),
+  M2=c( 'VSIG4', 'MS4A4A'), #'CD163',
+  
+  DC=c('ITGAX','CD40', 'CD80', 'CD83', 'CCR7', "IL7R", "LAMP3", "CD1C"),
+  pDC=c("FSCN1","CCL19","IDO1", "IDO2", 'LILRA4', 'IRF7', 'IL3RA'), #MZB1
+  MHCII=c("HLA-DQA1", "HLA-DQB1", "HLA-DQB2", "CD74"),
+  #mast = c('CMA1', 'MS4A2', 'TPSAB1', 'TPSB2', 'CPA3'),
+  
+  #eryth=c("HBA1",  "HBA2",  "HBB",   "HBD"),
+  
+  #stem=c('CD34', 'KIT', 'SOCS2', 'SOCS1'),
+  #cycle=c('MKI67', 'CCND1', 'CCND3', 'CCNE1', 'CCNE2', 'CCNB1', 'CCNB2'),
+  #APA =c('NUDT21', "CPSF6", "CSTF2"),
+  meta=c("GAPDH", 'ACTB', "SCCPDH")
+)
+
+
+
+<hr>
+pdf( paste0(outputRoot, keyword, "_05_2.Manual.marker.DotPlot.pdf"), width=26, height=pdf_height)
+DotPlot(scObj_2, features = markers, cluster.idents = T, cols=c('lightgrey', "red")) + RotatedAxis()+
+  ggtitle(keyword)
+dev.off()
+
+
+<hr>
+# More gene list:
+https://gitee.com/dawnEve/bioToolKit/blob/dev/R_scripts/single_script/do_Seurat.script.R
+
+</pre>
