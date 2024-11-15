@@ -2,10 +2,188 @@
 # ref: https://gitee.com/dawnEve/neu_colon/blob/master/base/functions.R
 
 if(0){
-	cat("v0.2 支持 html 二级标题，写法见下文")
+	cat("v0.2 支持 html 二级标题，写法见上文")
+	cat("v0.5 支持 html 一级标题，写法见上文")
 }
 
 
+#{**Colors**}#
+
+
+##{**colorset**}##
+
+# gene cluster 3
+colors.cluster = c('#E64B35','#4DBBD5','#3C5488')
+
+
+# 4 sample: 2 pairs
+# colorset: AML025
+colorset.AML = c(AML027="#F8766D", AML035="#FF0000", ctrl1="#A4DDDF", ctrl2="#00BFC4") #light before, dark after
+barplot( rep(1,4), col = colorset.AML )
+
+
+# 3 time points, 8 samples
+colorset.sample=c( "orange", "orange4",
+                   # "hotpink","deeppink", "red",  
+                   "#ff9999", "deeppink", "#9F0429",
+                   "cadetblue3","royalblue1", "navy")
+
+# 3 time points;
+colorset.time=c("0h"="#FFA500", "18h"="#FF1493", "48h"="#4876FF");
+# scale_color_manual(values=c("#FFA500", "#FF1493", "#4876FF") ) #for 0h, 18h ,48h
+colour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#98FB98","#F08080","#1E90FF","#7CFC00","#FFFF00",  
+         "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
+         "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
+         "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887")
+barplot( rep(1, length(colour)), col = colour, border = NA, space = 0)
+
+
+# 9 clusters
+library(scales)
+color.set1=scales::hue_pal()(9); color.set1
+# "#F8766D" "#D39200" "#93AA00" "#00BA38" "#00C19F" "#00B9E3" "#619CFF" "#DB72FB" "#FF61C3"
+barplot( rep(1, length(color.set1)), col = color.set1, border = NA, space = 0, yaxt="n")
+
+
+# G1, S, G2M
+colorset.cycle=c(G1="#3AC96D", S="#FDE725", G2M='deeppink')
+barplot( rep(1,3), col = colorset.cycle )
+# scale_color_manual(breaks = c("G1", "S", "G2M"), values=colorset.cycle)
+
+# 3 color dot plot 
+barplot( rep(1,3), col = c("#FDE725", "#3AC96D", "#440154") )
+
+
+# 14 colors
+colors <-c("#FED439FF","#709AE1FF",
+           "#D5E4A2FF","#197EC0FF","#F05C3BFF","#46732EFF",
+           "#71D0F5FF","#370335FF","#075149FF","#C80813FF","#91331FFF",
+           "#1A9993FF","#FD8CC1FF", "deeppink")
+barplot(rep(1,length(colors)), col=colors)
+
+
+
+
+
+==> 获取 Seurat 中默认颜色配方/ 配色提取
+
+1. DimPlot中默认的配色方案
+library(scales)
+show_col(hue_pal()(16))
+
+
+2. 提取DimPlot中画聚类时用到的颜色
+library(scales)
+p1 <- DimPlot(pbmc.nmf, group.by = "celltype_assign")
+x<-ggplot_build(p1)
+info = data.frame(colour = x$data[[1]]$colour, group = x$data[[1]]$group)
+info <- unique((arrange(info, group)))
+cols <- as.character(info$colour)
+
+> cols
+ [1] "#F8766D" "#EC823C" "#DD8D00" "#CA9700" "#B3A000" "#97A900" "#71B000" "#2FB600" "#00BB4B" "#00BF76" "#00C098" "#00C0B7"
+[13] "#00BDD1" "#00B7E8" "#00AEFA" "#3DA1FF" "#8F91FF" "#BE80FF" "#DE71F9" "#F265E7" "#FE61CF" "#FF64B3" "#FF6C92"
+
+
+
+
+
+
+==> 查看颜色
+scales::show_col( paletteer_d("ggsci::nrc_npg")[1:8] )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+##{**show_colorset**}##
+
+#' 一套颜色在单细胞点图的模拟效果
+#' 
+#' version:0.2 https://blog.csdn.net/wangjunliang/article/details/143275486
+#' Seurat colorset: https://zhuanlan.zhihu.com/p/541666692 #2(9)
+#'
+#' @param colors2 颜色向量
+#' @param pt.size  点的大小
+#' @param dot.per.cluster 每个类产生颜色数量
+#' @param cluster_number 主类大小，不设置，则表示和颜色总数一致
+#' @param radius 主图半径，默认即可
+#' @param zoom.factor 针对主图放大倍数
+#' @param scale.factor 随机点沿着核心点间距的缩放倍数
+#' @param shuffle 是否对颜色随机打乱，默认不随机
+#'
+#' @return 无返回值，就一个绘图效果
+#' @export
+#'
+#' @examples
+show_colorset=function(
+  colors2,
+  pt.size=1,
+  dot.per.cluster=100,
+  cluster_number=0,
+  radius=10,
+  zoom.factor=2, #绘制核心点时，整体放大倍数，方便个后续随机点留下空间
+  scale.factor=6,
+  shuffle=F,
+  main=""
+    ){
+  
+  message(length(colors2))
+  if(cluster_number<=0){
+    cluster_number = length(colors2)
+  }
+  
+  if(shuffle){
+    colors2=sample(colors2)
+  }
+  
+  #1.确定几个核心点
+  arr_x= radius * cos(2*pi / cluster_number* (1:cluster_number))
+  arr_y= radius * sin(2*pi / cluster_number* (1:cluster_number))
+  
+  #2.计算两点的距离
+  dot_dist = sqrt( (arr_x[1]-arr_x[2])**2 +  (arr_y[1]-arr_y[2])**2); dot_dist
+  
+  
+  #3.噪音点，随机分布在核心点周围，距离大概是：核心点距离/scale.factor
+  noiseX = dot_dist*rnorm(n=dot.per.cluster)/scale.factor
+  noiseY = dot_dist*rnorm(n=dot.per.cluster)/scale.factor
+  
+  #3. 绘制空坐标轴
+  main=ifelse(main=="", "Color test", main)
+  plot(arr_x*zoom.factor, arr_y*zoom.factor, col="white", xlab="UMAP_1", ylab="UMAP_2", main=main, mgp=c(2,1,0))
+  #4. 绘制噪音点
+  for(i in 1:cluster_number){
+    points(arr_x[i] + sample(noiseX), arr_y[i]+sample(noiseY), col=colors2[i], pch=19, cex=pt.size)
+  }
+}
+if(0){
+  show_colorset( DiscretePalette(26, palette='alphabet')[1:10], dot.per.cluster=500, zoom.factor = 1.2, pt.size = 2, main="alphabet")
+  show_colorset( c("red", "orange", "blue", "navy", "cyan", "grey"), dot.per.cluster=2000, zoom.factor = 2)
+  show_colorset( c("red", "orange", "blue", "navy", "cyan", "grey"), dot.per.cluster=2000, zoom.factor = 2, shuffle = T )
+}
+
+
+
+
+
+
+
+
+
+
+
+#{**1. Loading Data**}#
 
 ##{**load 10x with prefix**}##
 
@@ -221,6 +399,52 @@ scRNA[["ADT"]] <- adt_assay
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+#{**2. Main steps**}#
+
+
+
+##{**Feature_scale_PCA**}##
+# 1. HVG, Scale(all), PCA
+Feature_scale_PCA=function(object, nfeatures, scale.all=F){
+  object <- FindVariableFeatures(object = object, nfeatures=nfeatures)
+  if(scale.all){
+	genelist=rownames(object)
+  }else{
+	genelist=VariableFeatures(object)
+  }
+  object <- ScaleData(object = object, features = genelist)
+  object <- RunPCA(object=object, features=VariableFeatures(object))
+  return(object)
+}
+
+
+##{**Neighbor_cluster_umap**}##
+# 2. cellCluster,UMAP
+Neighbor_cluster_umap = function(object, dims, resolution){
+  object <- FindNeighbors(object = object, dims=dims)
+  object <- FindClusters(object = object, resolution = resolution)
+  object <- RunUMAP(object = object, dims=dims)
+  return(object)
+}
+
+
+
+
+
+
 ##{**addQC**}##
 AddQC=function(obj){
 	obj[["percent.mt"]] <- PercentageFeatureSet(obj, pattern = "^MT-")
@@ -330,83 +554,6 @@ if(0){
 
 
 
-##{**colorset**}##
-
-# gene cluster 3
-colors.cluster = c('#E64B35','#4DBBD5','#3C5488')
-
-
-# 4 sample: 2 pairs
-# colorset: AML025
-colorset.AML = c(AML027="#F8766D", AML035="#FF0000", ctrl1="#A4DDDF", ctrl2="#00BFC4") #light before, dark after
-barplot( rep(1,4), col = colorset.AML )
-
-
-# 3 time points, 8 samples
-colorset.sample=c( "orange", "orange4",
-                   # "hotpink","deeppink", "red",  
-                   "#ff9999", "deeppink", "#9F0429",
-                   "cadetblue3","royalblue1", "navy")
-
-# 3 time points;
-colorset.time=c("0h"="#FFA500", "18h"="#FF1493", "48h"="#4876FF");
-# scale_color_manual(values=c("#FFA500", "#FF1493", "#4876FF") ) #for 0h, 18h ,48h
-colour=c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#98FB98","#F08080","#1E90FF","#7CFC00","#FFFF00",  
-         "#808000","#FF00FF","#FA8072","#7B68EE","#9400D3","#800080","#A0522D","#D2B48C","#D2691E","#87CEEB","#40E0D0","#5F9EA0",
-         "#FF1493","#0000CD","#008B8B","#FFE4B5","#8A2BE2","#228B22","#E9967A","#4682B4","#32CD32","#F0E68C","#FFFFE0","#EE82EE",
-         "#FF6347","#6A5ACD","#9932CC","#8B008B","#8B4513","#DEB887")
-barplot( rep(1, length(colour)), col = colour, border = NA, space = 0)
-
-
-# 9 clusters
-library(scales)
-color.set1=scales::hue_pal()(9); color.set1
-# "#F8766D" "#D39200" "#93AA00" "#00BA38" "#00C19F" "#00B9E3" "#619CFF" "#DB72FB" "#FF61C3"
-barplot( rep(1, length(color.set1)), col = color.set1, border = NA, space = 0, yaxt="n")
-
-
-# G1, S, G2M
-colorset.cycle=c(G1="#3AC96D", S="#FDE725", G2M='deeppink')
-barplot( rep(1,3), col = colorset.cycle )
-# scale_color_manual(breaks = c("G1", "S", "G2M"), values=colorset.cycle)
-
-# 3 color dot plot 
-barplot( rep(1,3), col = c("#FDE725", "#3AC96D", "#440154") )
-
-
-# 14 colors
-colors <-c("#FED439FF","#709AE1FF",
-           "#D5E4A2FF","#197EC0FF","#F05C3BFF","#46732EFF",
-           "#71D0F5FF","#370335FF","#075149FF","#C80813FF","#91331FFF",
-           "#1A9993FF","#FD8CC1FF", "deeppink")
-barplot(rep(1,length(colors)), col=colors)
-
-
-
-
-
-
-
-==> 获取 Seurat 中默认颜色配方/ 配色提取
-
-1. DimPlot中默认的配色方案
-library(scales)
-show_col(hue_pal()(16))
-
-
-2. 提取DimPlot中画聚类时用到的颜色
-library(scales)
-p1 <- DimPlot(pbmc.nmf, group.by = "celltype_assign")
-x<-ggplot_build(p1)
-info = data.frame(colour = x$data[[1]]$colour, group = x$data[[1]]$group)
-info <- unique((arrange(info, group)))
-cols <- as.character(info$colour)
-
-> cols
- [1] "#F8766D" "#EC823C" "#DD8D00" "#CA9700" "#B3A000" "#97A900" "#71B000" "#2FB600" "#00BB4B" "#00BF76" "#00C098" "#00C0B7"
-[13] "#00BDD1" "#00B7E8" "#00AEFA" "#3DA1FF" "#8F91FF" "#BE80FF" "#DE71F9" "#F265E7" "#FE61CF" "#FF64B3" "#FF6C92"
-
-
 
 
 
@@ -436,6 +583,83 @@ AddBox = function(...){
 
 
 
+
+
+
+
+##{**StackVlnPlot**}##
+
+#' Stack VlnPlot
+#'
+#' @param obj Seurat object
+#' @param features gene list
+#' @param flip default: cluster on x, gene symbol on y and right side
+#' @param ... 
+#'
+#' @return ggplot2 obj
+#' @export
+#'
+#' @examples
+StackVlnPlot=function(obj, features, flip=T, ...){
+  VlnPlot(obj, features = features, pt.size = 0,
+          stack =T, flip = flip, ...) &
+    theme(
+      legend.position = "none",
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_text(size=10, vjust = 1, hjust = 1),
+      strip.text.y = element_text(size=12, hjust = 0),
+    )
+}
+
+
+
+
+
+
+
+
+##{**ShowCluster**}##
+
+#' Show the position of a cluster on umap
+#'
+#' @param scObj 
+#' @param clusterId 
+#' @param slot default seurat_clusters
+#' @param color highlight color, default darkred
+#'
+#' @return
+#' @export
+#'
+#' @examples
+#' showCluster(scObj, 17)
+#' showCluster(scObj, "BL1Y", slot="sample")
+#' showCluster(scObj, "BL1Y", slot="sample", color="purple")
+ShowCluster = function(scObj, clusterId, slot="seurat_clusters", color="darkred"){
+  df2 = as.data.frame(scObj@meta.data);
+  DimPlot(scObj, label = F, #group.by = "sample", 
+          #cells.highlight = df2[which(df2[, slot] == clusterId), "cell"],
+          cells.highlight = rownames( df2[which(df2[, slot] == clusterId), ]),
+          cols.highlight = color, cols = "grey")+ #c("darkred", "darkblue")
+    labs(title=paste0(slot, ": ", clusterId))+
+    theme(
+      legend.position = "none"
+    )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#{**3. Adv funcs **}#
 
 
 
@@ -645,6 +869,7 @@ color.pals = c("#DC143C","#0000FF","#20B2AA","#FFA500","#9370DB","#98FB98","#F08
 #' multi volcano plot for scRNA-seq
 #' @version 0.2 change legend order
 #' @version 0.3 add max_overlaps for annotation
+#' @version 0.4 label.size = NA,      # No border
 #'
 #' @param dat Seurat FindAllMarkers returns, must set only.pos = F;
 #' @param color.arr color list, default same as Seurat
@@ -734,7 +959,7 @@ multiVolcanoPlot = function(dat, color.arr=NULL, onlyAnnotateUp=T,
                               mapping=aes(x=x.local, y=avg_log2FC, label=gene),
                               force = 2, #size=2,
                               max.overlaps = max_overlaps,
-                              label.size = 0, #no border
+                              label.size = NA, #no border
                               fill="#00000000", #box fill color
                               seed = 233,
                               min.segment.length = 0,
@@ -772,86 +997,8 @@ multiVolcanoPlot = function(dat, color.arr=NULL, onlyAnnotateUp=T,
   #guides(fill=guide_legend(title="Change"))+ #change legend title
   vol.plot
 }
-#multiVolcanoPlot(DEG, color.pals)
-multiVolcanoPlot(scObj.markers.time)
-multiVolcanoPlot(scObj.markers.time, onlyAnnotateUp = F)
-
-
-
-
-
-
-
-
-
-
-
-
-
-##{**show_colorset**}##
-
-#' 一套颜色在单细胞点图的模拟效果
-#' 
-#' version:0.2 https://blog.csdn.net/wangjunliang/article/details/143275486
-#' Seurat colorset: https://zhuanlan.zhihu.com/p/541666692 #2(9)
-#'
-#' @param colors2 颜色向量
-#' @param pt.size  点的大小
-#' @param dot.per.cluster 每个类产生颜色数量
-#' @param cluster_number 主类大小，不设置，则表示和颜色总数一致
-#' @param radius 主图半径，默认即可
-#' @param zoom.factor 针对主图放大倍数
-#' @param scale.factor 随机点沿着核心点间距的缩放倍数
-#' @param shuffle 是否对颜色随机打乱，默认不随机
-#'
-#' @return 无返回值，就一个绘图效果
-#' @export
-#'
-#' @examples
-show_colorset=function(
-  colors2,
-  pt.size=1,
-  dot.per.cluster=100,
-  cluster_number=0,
-  radius=10,
-  zoom.factor=2, #绘制核心点时，整体放大倍数，方便个后续随机点留下空间
-  scale.factor=6,
-  shuffle=F,
-  main=""
-    ){
-  
-  message(length(colors2))
-  if(cluster_number<=0){
-    cluster_number = length(colors2)
-  }
-  
-  if(shuffle){
-    colors2=sample(colors2)
-  }
-  
-  #1.确定几个核心点
-  arr_x= radius * cos(2*pi / cluster_number* (1:cluster_number))
-  arr_y= radius * sin(2*pi / cluster_number* (1:cluster_number))
-  
-  #2.计算两点的距离
-  dot_dist = sqrt( (arr_x[1]-arr_x[2])**2 +  (arr_y[1]-arr_y[2])**2); dot_dist
-  
-  
-  #3.噪音点，随机分布在核心点周围，距离大概是：核心点距离/scale.factor
-  noiseX = dot_dist*rnorm(n=dot.per.cluster)/scale.factor
-  noiseY = dot_dist*rnorm(n=dot.per.cluster)/scale.factor
-  
-  #3. 绘制空坐标轴
-  main=ifelse(main=="", "Color test", main)
-  plot(arr_x*zoom.factor, arr_y*zoom.factor, col="white", xlab="UMAP_1", ylab="UMAP_2", main=main, mgp=c(2,1,0))
-  #4. 绘制噪音点
-  for(i in 1:cluster_number){
-    points(arr_x[i] + sample(noiseX), arr_y[i]+sample(noiseY), col=colors2[i], pch=19, cex=pt.size)
-  }
-}
 if(0){
-  show_colorset( DiscretePalette(26, palette='alphabet')[1:10], dot.per.cluster=500, zoom.factor = 1.2, pt.size = 2, main="alphabet")
-  show_colorset( c("red", "orange", "blue", "navy", "cyan", "grey"), dot.per.cluster=2000, zoom.factor = 2)
-  show_colorset( c("red", "orange", "blue", "navy", "cyan", "grey"), dot.per.cluster=2000, zoom.factor = 2, shuffle = T )
+	#multiVolcanoPlot(DEG, color.pals)
+	multiVolcanoPlot(scObj.markers.time)
+	multiVolcanoPlot(scObj.markers.time, onlyAnnotateUp = F)
 }
-

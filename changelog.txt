@@ -15,6 +15,7 @@ v0.9.3@picb R Functions v0.3 Add menu_bottom-right.css [2024.5.27]
 v0.9.4@picb R Functions v0.4 create bottom right menu after loading R code [2024.5.31]
 v0.9.5@picb add marker_list/ [2024.7.10]
 v0.9.6@picb update FeaturePlot2 [2024.11.6]
+v0.9.7@picb update Functions v0.5 support header 1; header hover [2024.11.15]
 
 
 ## git commit 

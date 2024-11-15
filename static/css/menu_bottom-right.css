@@ -51,3 +51,24 @@
 #cli_title b{padding: 8px 10px; 
 	cursor:pointer;
 }
+
+
+
+/* 段落前空几格 */
+#rightMenu .indent_1{text-indent: 0em;}
+#rightMenu .indent_2{text-indent: 2em;}
+#rightMenu .indent_3{text-indent: 4em;}
+#rightMenu .indent_4{text-indent: 6em;}
+#rightMenu .indent_5{text-indent: 8em;}
+#rightMenu .indent_6{text-indent: 10em;}
+
+
+
+
+/* headers: 最多支持2级目录，再细没有意义 */
+#main_code h1:after{ content: "H1"; color: #efefef; }
+#main_code h1:hover:after{ color: #eaa; }
+
+#main_code h2:after{ content: "H2"; color: #efefef; }
+#main_code h2:hover:after{ color: #eaa; }
+

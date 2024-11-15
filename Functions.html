@@ -15,7 +15,17 @@ pre{
 }
 
 h2{
-	border-top: 2px solid black;
+	border-top: 1px solid black;
+	padding-left: 5px;
+	padding-bottom:0;
+	margin-bottom:0;
+	color:#999;
+	font-family:"微软雅黑"
+}
+
+
+h1{
+	border-top: 3px solid black;
 	padding-left: 5px;
 	padding-bottom:0;
 	margin-bottom:0;
@@ -38,16 +48,18 @@ h2{
 0.1 20240411 init single html version
 0.2 20240508 Add R file which can be used in R and shown on html directly
 0.3 20240527 Add menu_bottom-right.css
--->
 0.4 20240531 create bottom right menu after loading R code
+-->
+0.5 20241115 add header 1
 </p>
 
 
 <pre class="desc">
 代码显示流程：
-- 代码读取自 <b class=red>code/Functions.R</b>
+- 本页代码读取自 <b class=red>code/Functions.R</b>
 - 代码中所有 &lt; 会被替换为 &amplt;
 - 代码中所有 ##{** xx **}## 会被替换为 html 二级标题 &lt;h2&gt; xx &lt;/h2&gt;
+- 代码中所有 ##{* xx *}## 会被替换为 html 一级标题 &lt;h1&gt; xx &lt;/h1&gt;
 
 代码书写建议：
 - 记录版本变更 编号和理由，R和本html的更新记录到各自文件顶部，html只显示最新记录。
@@ -165,14 +177,19 @@ var createRightMenu=function(){
 		oA.setAttribute("href", "#"+i);
 		//(1.2)添加事件：单击则刷新当前高亮
 		oA.onclick=highlight_curent_munu;
-		
+
 		oLi.appendChild(oA);
+
+		var classVal=oLi.getAttribute("class") || ""
+		oLi.setAttribute("class", classVal.concat(" indent_" + oH.tagName.substring(1)) );
+
 		oUl.appendChild( oLi );
-		
+
 		//(2)在原文h2等标题后插入a锚点，使用 my-data="anchor" 进行区分
 		var oA2=document.createElement("a");
 		oA2.setAttribute("name", i)
 		oA2.setAttribute("my-data", "anchor");
+
 		oH.parentNode.insertBefore(oA2, oH);
 	}
 	oBox.appendChild(oUl);
@@ -246,6 +263,11 @@ function loadRCode(success){
 		// 替换字符串 ##{**VolcanoPlot**}## 为 header 2
 		dat = dat.replace(/##\{\*\*/g, '<h2>');
 		dat = dat.replace(/\*\*\}##/g, '</h2>');
+
+		// for header 1
+		dat = dat.replace(/#\{\*\*/g, '<h1>');
+		dat = dat.replace(/\*\*\}#/g, '</h1>');
+
 		// insert to div
 		document.getElementById("main_code").innerHTML=dat
 		
