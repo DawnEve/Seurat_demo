@@ -182,6 +182,272 @@ if(0){
 
 
 
+##{**getMiddleColor**}##
+
+#' 获取中间颜色
+#'
+#' @param start_color 设定起点颜色
+#' @param end_color 设定终点颜色
+#' @param len 中间颜色个数
+#' @param method 方法
+#' @param space 颜色空间
+#' @param middle.only 是否只返回中间颜色
+#'
+#' @return color array, like c("#7F007F", ...)
+#' @export
+#'
+#' @examples
+getMiddleColor=function(start_color="red", 
+                        end_color="blue", 
+                        len=1, 
+                        method=c("linear", "spline")[1],
+                        space = c("rgb", "Lab")[1], 
+                        middle.only=F){
+  if(len<=0){
+    len=1
+    warning("len<=0: already change len=1")
+  }
+  # 创建颜色渐变调色板
+  color_palette <- colorRampPalette(
+    colors=c(start_color, end_color),
+    interpolate=method,
+    space=space
+  )
+  # 生成10个颜色
+  generated_colors <- color_palette(len+2)
+  
+  # 如果指定只返回中间颜色
+  if(middle.only)
+    return(generated_colors[2:(length(generated_colors)-1)])
+  return(generated_colors)
+}
+if(0){
+  getMiddleColor()
+  c("#FF0000", "#7F007F", "#0000FF")
+  getMiddleColor(space="Lab")
+  c("#FF0000", "#C90088", "#0000FF")
+  getMiddleColor("#BDA7CB", "#684797")
+  c("#BDA7CB", "#9277B1", "#684797")
+}
+
+
+
+
+
+
+
+
+
+
+
+##{**getColorsFromPicture**}##
+
+#' 给出图片的代表颜色卡：kmeans法
+#' 
+#' @version v1.2 给出聚类效果的3d展示
+#' @version v1.3 static 左侧不留空间，右侧多些，方便显示颜色
+#'
+#' @param filename jpg or png filename
+#' @param k k-means聚类个数，默认5
+#' @param show 是否展示颜色效果，默认"static", 可选包括: "none"(不显示图片), "3d", "3dR", "3di", "3dR”, "3diR"; 
+#' 区别是i是交互式的
+#' 不加R显示聚类后的代表颜色，加R是真实颜色（参考意义不大）
+#' @param angle.3d 当且仅当show == "3d"，设置角度有效，默认45，范围 [0, 360]。
+#'
+#' @return
+#' @export
+#'
+#' @examples
+getColorsFromPicture=function(filename, k=5, show="static", angle.3d=45){
+  # step1
+  #filename = "D:\\Program Files (x86)\\EyeDefender\\scenery-50.jpg"
+  #filename = "D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg"
+  
+  # step2
+  # 读取图片
+  if( endsWith(filename, "jpg") || endsWith(filename, "JPG") ){
+    library(jpeg)
+    img <- readJPEG(filename) 
+  }else if( endsWith(filename, "png") || endsWith(filename, "PNG") ){
+    library(png)
+    img <- readPNG(filename)
+  }
+  
+  # 获取图片的维度
+  dim_img <- dim(img)
+  
+  # 将图片转换为数据框，包含每个像素的 RGB 值
+  pixels <- as.data.frame(matrix(img, nrow = dim_img[1] * dim_img[2], ncol = 3))
+  colnames(pixels) <- c("R", "G", "B")
+  
+  # step3
+  # 设置聚类数量
+  k <- k  # 你可以根据需要调整这个值
+  
+  # 进行 K-means 聚类
+  set.seed(42)  # 设置随机种子以确保结果可重复
+  kmeans_result <- kmeans(pixels, centers = k)
+  
+  # 将聚类结果添加到数据框中
+  pixels$cluster <- as.factor(kmeans_result$cluster)
+  
+  # step4
+  # 计算每个聚类的频率
+  library(dplyr)
+  color_summary <- pixels %>%
+    group_by(cluster) %>%
+    summarise(
+      R = mean(R),
+      G = mean(G),
+      B = mean(B),
+      count = n()
+    ) %>%
+    arrange(desc(count))  # 按频率降序排列
+  
+  # 提取代表颜色
+  representative_colors <- color_summary %>%
+    select(R, G, B) %>%
+    as.matrix() %>%
+    apply(1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 1))
+  
+  
+  ########################################
+  # 显示代表颜色：静态图 + 色卡
+  ########################################
+  if(show=="static"){
+    oldPar=par(no.readonly = T)
+    
+    # 创建一个窗口并设置布局
+    par(mfrow = c(2, 1))  # 设置 2 行 1 列的布局
+    
+    # 显示颜色
+    par(mar = c(0, 0, 4, 1.5)) #bottom, left, top, right
+    posX=barplot(rep(1, nrow(color_summary)), col = representative_colors, border = NA, axes = F,
+                 #vp = viewport(layout.pos.row = 2, layout.pos.col = 1),
+                 main="")
+    text(posX, par("usr")[4]*1.04, labels=representative_colors, 
+         srt=45, adj=0,
+         xpd=T,
+         col="black", xpd=T)
+    
+    # 显示图片
+    par(mar = c(0, 0, 0, 1.5))
+    plot(NA, NA, xlim=c(1,dim_img[2]), ylim=c(1,dim_img[1]), type="n", xlab="", ylab="", axes=FALSE)
+    rasterImage(img, 1, 1, dim_img[2], dim_img[1])
+    par(oldPar)
+  }
+  #
+  ########################################
+  # 3d展示颜色
+  ########################################
+  else if( startsWith(show, "3d") ){
+    #head(pixels)
+    #         R         G         B cluster
+    #1 0.7686275 0.5490196 0.2549020       2
+    #2 0.8901961 0.6666667 0.3647059       2
+    table(pixels$cluster)
+    #     1      2      3      4      5      6      7      8 
+    # 295390 205034 321986 242952 239743 182654 323470 262371 
+    
+    x=pixels$R
+    y=pixels$G
+    z=pixels$B
+    
+    color_summary #k rows
+    #  cluster      R     G     B  count
+    #  <fct>    <dbl> <dbl> <dbl>  <int>
+    #1 3       0.292  0.267 0.247 485072
+    #2 5       0.382  0.527 0.615 466379
+    #
+    #rgb(0.292,  0.267, 0.247, maxColorValue = 1)
+    #[1] "#4A443F"
+    
+    # head(representative_colors )
+    # "#4B443F" "#61869D" "#A2B9C7" "#A5805D" "#165576"
+    
+    #order color by cluster
+    representative_colors2=representative_colors[color_summary$cluster]
+    
+    #color for each point
+    colors = factor( representative_colors2[match(pixels$cluster, color_summary$cluster)] ) #代表色
+    #全部颜色
+    colors.real = pixels  %>% select(R, G, B) %>%
+      as.matrix() %>%
+      apply(1, function(x) rgb(x[1], x[2], x[3], maxColorValue = 1))
+    
+    #length(colors)
+    #table(colors)
+    
+    dat <- data.frame(x, y, z, colors)#生成数据框
+    head(dat)
+    
+    # 3d 静态图像
+    if(show=="3d"){
+      # method1
+      library(scatterplot3d)
+      plot3d_A <- with(dat, scatterplot3d(x, y, z, color = colors, 
+                                          pch = 16, angle= angle.3d, 
+                                          cex.symbols=0.1,
+                                          main=paste0("Representative colors | angle=", angle.3d))
+                       )
+      #legend(plot3d_A$xyz.convert(0.5, 0.7, 0.5), pch=16, yjust=0,
+      #       border = NA, 
+      #       bg = NA,
+      #       legend=levels(dat$colors), 
+      #       col = seq_along(levels(dat$colors)))
+    }else if(show=="3dR"){
+      # use real colors
+      library(scatterplot3d)
+      plot3d_A <- with(dat, scatterplot3d(x, y, z, color = colors.real, 
+                                          pch = 16, angle= angle.3d, 
+                                          cex.symbols=0.1,
+                                          main=paste0("Real Colors | angle=", angle.3d))
+      )
+    }else if(show=="3di"){
+      # method2
+      library(rgl)
+      plot3d_B <- with(dat, plot3d(x, y, z, col = colors, pch = 16))
+    }else if(show=="3diR"){
+      library(rgl)
+      plot3d_C <- with(dat, plot3d(x, y, z, col = colors.real, pch = 16))
+    }
+  }
+  # 最后输出16进制代表颜色json
+  message('>> json hex colors: ', representative_colors |> jsonlite::toJSON() )
+  return(representative_colors)
+}
+if(0){
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-49.jpg")
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-46.jpg", k=10)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-56.jpg", k=8)
+  #
+  getColorsFromPicture("C:\\Users\\DELL\\Pictures\\Biology\\Bone-marrow-stem-cell-differentiation.png", k=30)
+  #
+  getColorsFromPicture("C:\\Users\\DELL\\Pictures\\scRNA-seq\\Heatmap_cluster.png", k=40)
+  #
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\animal-7-bee.jpg", k=15)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-32.jpg", k=15)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-38.jpg", k=15)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-48.jpg", k=15)
+  # test 3d
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="none")
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="3d")
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="3d", angle.3d=80)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="3dR", angle.3d=80)
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="3di")
+  getColorsFromPicture("D:\\Program Files (x86)\\EyeDefender\\scenery-30.jpg", k=8, show="3diR")
+}
+
+
+
+
+
+
+
+
+
+
 
 #{**1. Loading Data**}#
 
@@ -417,8 +683,8 @@ scRNA[["ADT"]] <- adt_assay
 
 
 ##{**Feature_scale_PCA**}##
-# 1. HVG, Scale(all), PCA
-Feature_scale_PCA=function(object, nfeatures, scale.all=F){
+# 1. HVG, Scale, PCA
+Feature_scale_PCA=function(object, nfeatures=2000, scale.all=F){
   object <- FindVariableFeatures(object = object, nfeatures=nfeatures)
   if(scale.all){
 	genelist=rownames(object)
@@ -669,6 +935,7 @@ ShowCluster = function(scObj, clusterId, slot="seurat_clusters", color="darkred"
 #' v2.1
 #' v2.2 第一参数的空值跳过
 #' v2.3 legendTitle
+#' v2.4 xlab, ylab default NULL
 #'
 #' @param tbl1 data.frame, draw by each column
 #' @param colors colors of each row(default NULL, auto-color)
@@ -684,7 +951,7 @@ ShowCluster = function(scObj, clusterId, slot="seurat_clusters", color="darkred"
 #' @examples
 #' 
 table2barplot=function(tbl1, colors=NULL,levels=NULL, scale=T, title="", 
-                       omit=NULL, xlab="", ylab="", legendTitle=NULL, width=0.9){
+                       omit=NULL, xlab=NULL, ylab=NULL, legendTitle=NULL, width=0.9){
   tbl1= tbl1[, which(colSums(tbl1)>0)] #remove all 0 columns
   tbl1= tbl1[which(rowSums(tbl1)>0), ] #remove all 0 rows
   # remove some columns by column names
@@ -696,14 +963,15 @@ table2barplot=function(tbl1, colors=NULL,levels=NULL, scale=T, title="",
   if(!is.null(levels)){
     df2$Var1=factor(df2$Var1, levels =levels )#change order
   }
-  if(""==ylab){ ylab=ifelse(scale, "Freq", "Count") }
-  if(""==xlab){ xlab="Index" }
+  if(is.null(ylab) ){ ylab=ifelse(scale, "Freq", "Count") }
+  if(is.null(xlab) ){ xlab="Index" }
   
   # draw
   g1=ggplot(df2, aes(x=Var2, y=Freq, fill=Var1))+
     geom_bar(stat="identity", position=ifelse(scale, "fill","stack"), width=width )+
     labs(x=xlab, y=ylab, title=title)+
     theme_classic(base_size = 14)+
+	scale_y_continuous( expand = c(0, 0) )+
     theme(axis.text.x=element_text(angle=60, hjust=1,size=rel(1.2)) )
   
   legendTitle=ifelse(is.null(legendTitle), "", legendTitle)
@@ -1002,3 +1270,218 @@ if(0){
 	multiVolcanoPlot(scObj.markers.time)
 	multiVolcanoPlot(scObj.markers.time, onlyAnnotateUp = F)
 }
+
+
+
+
+
+
+
+
+
+
+##{**AddText**}##
+
+#' Add text to ggplot2 figures
+#'
+#' @param label text you want to put on figure
+#' @param x position x, left is 0, right 1
+#' @param y position y, bottom is 0, up 1
+#' @param color text color
+#' @param size font size
+#'
+#' @return
+#' @export
+#'
+#' @examples
+AddText=function(label="RNA cluster",x = 0.18,y = 0.035, color="red", size=12){
+  library(grid)
+  grid.text(label=label, x = x, y = y, 
+            gp=gpar(col=color, fontsize=size,
+                    draw=TRUE,just = "centre"))
+}
+if(0){
+  # method1
+  ggplot(mtcars, aes(mpg, wt)) + geom_point(); AddText("my note")
+  # method2
+  p1=ggplot(mtcars, aes(mpg, wt)) + geom_point() + theme_classic()
+  print(p1)
+  print(AddText("my note"))
+  print(AddText("another text", x=0.7, y=0.8, color = "navy"))
+}
+
+
+
+
+
+
+
+
+
+
+
+
+#{**4. Common Fun**}#
+
+
+##{**VlnPlot_Box**}##
+#两列，x: type, y: val;
+VlnPlot_Box=function(data.plot, my_comparisons=NULL){
+	colorset.genetypes
+	my.breaks
+	my.labels
+	my_comparisons <- list( c("One_pA", "tandem"), c("One_pA", "exon_switch"), c("tandem", "exon_switch") )
+	
+	ggplot(data.plot, aes(x=type, y=log10(val), fill=type))+
+	  geom_violin(show.legend = F)+
+	  geom_boxplot(width=0.2, fill="white", show.legend = F, outliers = F)+
+	  #stat_compare_means(method = "wilcox.test")+
+	  stat_compare_means(comparisons = my_comparisons, method = "wilcox.test")+
+	  theme_classic(base_size = 14)+
+	  theme(
+		axis.text.x = element_text(angle = 45, hjust = 1)
+	  )+
+	  scale_fill_manual(values = colorset.genetypes, breaks = my.breaks, labels=my.labels)+
+	  scale_x_discrete(breaks = my.breaks, labels = my.labels) +
+	  labs(x="", y="Average expression(Log)\n(Log10)" )
+}
+
+
+
+
+
+
+##{**wide2long**}##
+
+#' data.frame wide to long
+#'
+#' @param dat wide df
+#' @param keep colnames want to keep
+#'
+#' @return long df
+#' @export
+#'
+#' @examples
+wide2long=function(dat, keep=NULL){
+  col.name = colnames(dat)
+  if(!is.null(keep)){
+    col.name = setdiff(colnames(dat), keep)
+  }
+  dat2=dat[, col.name, drop=F]
+  #
+  result = data.frame(
+    val= unlist(dat2), #按列展开数据框
+    obs= rep( rownames(dat2), times=ncol(dat2) ), #row as obs
+    variation= rep( colnames(dat2), each=nrow(dat) ) #col as variables
+  )
+  
+  if(!is.null(keep)){
+    for(ele in keep){
+      result[, ele]=rep( dat[, ele], times=ncol(dat2) )
+    }
+  }
+  
+  return(result)
+}
+if(0){
+  t1=wide2long(iris, c("Species") )
+  dim(t1)
+  head(t1)
+  tail(t1)
+  #               val obs   variation   Species
+  #Petal.Width145 2.5 145 Petal.Width virginica
+  #Petal.Width146 2.3 146 Petal.Width virginica
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#{**5. Format transformation**}#
+
+
+
+
+##{**Rlist2csv**}##
+
+#' R list to csv used in metascape
+#' 
+#' @version 0.2 文件名不能覆盖
+#'
+#' @param gene_list R list with names and character values
+#' @param output.file output filename, optional
+#'
+#' @return
+#' @export
+#'
+#' @examples
+Rlist2csv=function(gene_list, output.file=NULL){
+  # 将列表转换为数据框，填充缺失值
+  gene_df <- do.call(rbind, lapply(gene_list, function(x) {
+    length(x) <- max(sapply(gene_list, length))  # 填充至最大长度
+    return(x)
+  })) |> t() |> as.data.frame()
+  
+  # 将数据框的列名设置为列表的名称
+  colnames(gene_df) <- names(gene_list)
+  
+  # 将NA替换为空字符""
+  gene_df[is.na(gene_df)]=""
+  
+  if(! is.null(output.file)){
+    if(file.exists(output.file)){
+      stop("Output file exists! Please change to a new filename:\n", output.file)
+    }
+    write.csv(gene_df, file=output.file, row.names = FALSE, quote = F)
+    print(sprintf("save csv file to: %s", output.file))
+    return(1)
+  }else{
+    return(gene_df)
+  }
+}
+if(0){
+  # 创建示例列表
+  gene_list <- list(
+    GeneA = c("A1", "A2", "A3"),
+    GeneB = c("B1", "B2"),
+    GeneC = c("C1", "C2", "C3", "C4")
+  )
+  
+  Rlist2csv(gene_list)
+  Rlist2csv(gene_list, "xx.geneset.csv")
+}
+
+
+
+
+
+
+##{**save_pheatmap_pdf**}##
+
+save_pheatmap_pdf <- function(x, filename, width=7, height=7) {
+  stopifnot(!missing(x))
+  stopifnot(!missing(filename))
+  
+  pdf(filename, width=width, height=height)
+  grid::grid.newpage()
+  grid::grid.draw(x$gtable)
+  dev.off()
+}
+if(0){
+	save_pheatmap_pdf(res, "./test.pdf",8,12)
+}
+
