@@ -95,8 +95,17 @@ scales::show_col( paletteer_d("ggsci::nrc_npg")[1:8] )
 
 
 
+==> 可视化技巧：FeaturePlot 自定义渐变颜色，高亮显示某一个feature的高值
+my.colors = colorRampPalette(c("lightblue", "white", "darkred"))(100)
+# cols = colorRampPalette(brewer.pal(11, "Spectral"))(10) |> rev()
+FeaturePlot(sce1, feature = "percent.mt", raster = F, cols = my.colors)
 
 
+
+==> 根据类别个数，生成一组颜色
+ncluster <- length(unique(sce1_trf[[]]$seurat_clusters))
+mycol <- colorRampPalette(brewer.pal(8, "Set2"))(ncluster)
+DimPlot(sce1_trf, label = T, cols = mycol)
 
 
 
@@ -173,6 +182,64 @@ if(0){
   show_colorset( c("red", "orange", "blue", "navy", "cyan", "grey"), dot.per.cluster=2000, zoom.factor = 2, shuffle = T )
 }
 
+
+
+
+
+
+
+
+
+
+##{**showColorlist**}##
+
+#' show colorlist using R base barplot
+#'
+#' @param colorset color array
+#' @param title main title, or sub title
+#' @param hex.show whether print color names out
+#' @param angle text rotation
+#'
+#' @return
+#' @export
+#'
+#' @examples
+showColorlist=function(colorset, hex.show=T, title="", angle=60){
+  #colorset.cluster = c(ggsci::pal_npg()(10), "#F2AF1C", "#668C13" ); colorset.cluster
+  #"#E64B35FF" "#4DBBD5FF" "#00A087FF" "#3C5488FF" "#F39B7FFF" "#8491B4FF" "#91D1C2FF" "#DC0000FF" "#7E6148FF" "#B09C85FF"
+  oldPar=par(no.readonly = T)
+  #par(mar = c(0, 0, 5.5, 1.5)) #bottom, left, top, right
+  
+  # 凑参数列表
+  my_params = list(
+    height=rep(1, length(colorset)), 
+    col = colorset, 
+    border = NA, space = 0, yaxt="n"
+  )
+  if(T==hex.show){
+    my_params$sub=title
+  }else{
+    my_params$main=title
+  }
+  #执行绘图函数
+  posX=do.call(barplot, my_params)
+  # 添加颜色hex文字
+  if(hex.show){
+    text(posX, par("usr")[4]*1.04, labels=colorset, 
+         srt=angle, adj=0,
+         xpd=T,
+         col="black", xpd=T)
+  }
+  #par(oldPar)
+}
+if(0){
+  colorset.cluster = c(ggsci::pal_npg()(10), "#F2AF1C", "#668C13" ); colorset.cluster
+  #
+  showColorlist(colorset.cluster)
+  showColorlist(colorset.cluster, F)
+  showColorlist(colorset.cluster, title="CNS colors", angle=45)
+  showColorlist(colorset.cluster, F, title="CNS colors")
+}
 
 
 
@@ -820,6 +887,100 @@ if(0){
 
 
 
+##{**FindMarkersDIY2**}##
+
+#' 找cluster marker 的快捷方法
+#' 
+#' 求每个cluster中每个基因的均值，减去其他cluster的均值后记录结果
+#' 输出三列：gene, cluster, avg_logFC
+#' 
+#' v0.2 简化
+#'
+#' @param object Seurat
+#' @param group.by 分组变量名，要存在于 meta.data 中
+#' @param downsample 抽样，默认 200 cell / group。设置<=0则不抽样
+#' @param verbose 是否输出很多日志，默认输出
+#' @param seed 种子值
+#'
+#' @return
+#' @export
+#'
+#' @examples
+FindMarkersDIY2 = function(object = object, 
+                           group.by="seurat_clusters", 
+                           downsample=200, 
+                           verbose=T, 
+                           seed=42){
+  # 0. paras
+  if(!group.by %in% colnames(object@meta.data)){
+    stop(group.by, " not in object meta.data!")
+  }
+  
+  # set idents
+  Idents(object)=group.by
+  # down sample
+  if(downsample > 0 & downsample <= 50){
+    downsample=50
+  }
+  
+  if(downsample > 0){
+    set.seed(seed)
+    object=subset(object, downsample=downsample)
+    message(">> downsample to ", downsample, " per cluster")
+  }
+  
+  #1. clazz
+  idents <- levels(object)
+  len <- length(idents)
+  message( sprintf("> group.by=%s, length:%d", group.by, len) )
+  
+  #2. iter idents
+  temp <- c()
+  dat=object@assays$RNA@data
+  for (i in 1:len) {
+    cids = WhichCells(object, idents = idents[i])
+    if(verbose){
+      message( sprintf(">[%d] %s, cell number:%d, data col:%d", i, idents[i], length(cids), ncol(dat) ) );
+    }
+    temp[[i]] <- apply(
+      X = dat[, cids, drop = FALSE],
+      MARGIN = 1,
+      FUN = function(x){log(x = mean(x = expm1(x = x)) + 1)}
+    )
+  }
+  temp.exp <- as.data.frame(temp, col.names = idents)
+  # 本类的均值，减去其他类的均值
+  for (i in 1:len) {
+    temp[[i]] <- temp.exp[,i] - log(x = rowMeans(x = expm1(x = temp.exp[, -c(i)])) + 1)
+  }
+  temp.exp.diff <- as.data.frame(temp, col.names = idents)
+  temp.exp.diff$gene <- rownames(temp.exp.diff)
+  temp.exp.diff <- reshape2::melt(temp.exp.diff, id.vars = "gene", variable.name = "cluster", value.name = "avg_logFC")
+  return(temp.exp.diff)
+}
+if(0){
+  wjl2=FindMarkersDIY2(sce1, "seurat_clusters")
+  
+  # 更快的方式
+  set.seed(42)
+  MM.marker.sim = FindMarkersDIY2(MM, "seurat_clusters", downsample = 150)
+  marker.sim %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC) %>% pull(gene)
+  
+  DimPlot(sce1, label=T)
+  DotPlot(sce1, features = unique(c(
+    "PTPRC", "CD3D", "CD3E", "CD3G", "CD4", "CD8A", "CD8B", "CD79A", "CD79B","MS4A1", "CD163","CD68",
+    'EPCAM', 'KRT8', 'KRT18',
+    wjl2 %>% group_by(cluster) %>% top_n(n = 5, wt = avg_logFC) %>% pull(gene)
+  )), cols = c("lightgrey", "red"), cluster.idents = T)+RotatedAxis()
+}
+
+
+
+
+
+
+
+
 
 
 
@@ -1110,6 +1271,45 @@ if(0){
 
 
 
+
+##{**getTopGenes4VolcanoPlot**}##
+
+#' VolcanoPlot 的准备函数
+#' Aim: 1.prep input for volcano, 2. top genelist, 
+#'
+#' @param dif FindMarkers results
+#' @param n top n genes
+#'
+#' @return list for 2 aims, for VolcanoPlot
+#' @export
+#'
+#' @examples
+getTopGenes4VolcanoPlot=function(dif, n=5){
+  dif$gene = rownames(dif)
+  dif2 = dif %>% filter( p_val_adj<0.05 & abs(avg_log2FC)> log2(1.5) )
+  #1.
+  dat.input=data.frame(
+    symbol=rownames(dif),
+    log2FoldChange=dif$avg_log2FC,
+    padj=dif$p_val_adj
+  )
+  #2.
+  genelist=unique(c(
+    #by delta
+    dif2 %>% top_n(n, wt= avg_log2FC ) %>% pull(gene),
+    dif2 %>% top_n(n, wt=-avg_log2FC ) %>% pull(gene),
+    #by p value
+    dif2 %>% filter( avg_log2FC >0 ) %>% top_n(n, wt=-log(p_val_adj) ) %>% pull(gene),
+    dif2 %>% filter( avg_log2FC <0 ) %>% top_n(n, wt=-log(p_val_adj) ) %>% pull(gene)
+  ))
+  return(list(dat.input, genelist))
+}
+if(0){
+  pdf(paste0(outputRoot, keyword, "_02_1.DEAPA.gDPAU.18h_0h.volcano.pdf"), width=4.5, height = 4.5)
+  dat=getTopGenes4VolcanoPlot(RNA.18h_0h)
+  VolcanoPlot(dat[[1]], title="18h vs 0h, RNA", label.max = 50, label.symbols = dat[[2]] )
+  dev.off()
+}
 
 
 
