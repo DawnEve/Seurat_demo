@@ -18,6 +18,7 @@ v0.9.6@picb update FeaturePlot2 [2024.11.6]
 v0.9.7@picb update Functions v0.5 support header 1; header hover [2024.11.15]
 v0.9.8@picb add favicon.ico; 扩充函数库; [2024.12.1]
 v0.9.9@picb add fun: FindMarkersDIY2[2024.12.13]
+v1.0.0@picb add code on github [2024.12.20]
 
 
 ## git commit 

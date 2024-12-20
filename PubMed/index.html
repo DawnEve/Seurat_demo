@@ -1,4 +1,5 @@
 <meta charset="UTF-8">
+<base target="_blank" />
 
 <style>
 h2{border-top:1px solid black;}
@@ -7,14 +8,24 @@ h2{border-top:1px solid black;}
 
 <h1>Code from top papers</h1>
 
+<a href="../">back home</a>
+
+<!--
+1. 第一行链接，标题
+2. 年份，杂志，标题，大概内容
+3. 重要结论
+4. 代码优点: 宏观+微观
+-->
+
+
 <pre>
 <h2>Code: local</h2>
-a01-PMID-39024031-Code.R
+<a href="a01-PMID-39024031-Code.R">a01-PMID-39024031-Code.R</a>
 	2024 BCMA CAR-T治疗的单细胞数据
-	优点：细胞分群语句，三个层次细胞命名
+	优点：细胞分群语句，三个层次细胞命名; sctransform + RPCA 整合多样本; 颜色设置包 paletteer;
 	缺点：缺少更多细节
 
-a02-argparse 来源：群分享
+<a href="a02-argparse/">a02-argparse/</a> (<a href="a02-argparse/run_multiple_seurat.R">run_multiple_seurat.R</a> | <a href="a02-argparse/utils.R">utils.R</a>) 来源：群分享
 	空间转录组 单脚本分析
 	优点：
 		R语言的 argparse 传递参数 --input
@@ -22,6 +33,20 @@ a02-argparse 来源：群分享
 	缺点：很少注释；没有找到paper
 
 
+<a href="a03-Treg-NC_2021-PMID34599187.Rmd">a03-Treg-NC_2021-PMID34599187.Rmd</a>
+	2021 NC: CD177 modulates the function and homeostasis of tumor-infiltrating regulatory T cells
+	we identify two distinct transcriptional fates for TI Treg cells, Fate-1 and Fate-2. The Fate-1 signature is associated with a poorer prognosis in ccRCC and several other solid cancers.
+	优点: Rmd的使用; 多样品整合[MergeSeurat, RunMultiCCA, AlignSubspace] Trajectory 2个命运; 宽变长 melt; 
+	细胞比例图:
+	```
+	freq_table <- prop.table(x = table(immune.combined2@ident, immune.combined2@meta.data[, "Type"]), 
+	margin = 2)
+	freq_table <- as.data.frame(freq_table)
+	ggplot(freq_table, aes(x=Var1, y=Freq, fill=Var2)) + 
+	geom_bar(stat="identity", position="fill", color="black", lwd=0.25) + 
+	theme(axis.title.x = element_blank())
+	ggsave("CompositionProp.pdf", width=4, height=2)
+	```
 
 
 
