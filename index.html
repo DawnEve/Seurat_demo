@@ -8,6 +8,12 @@ body{
 hr{
 	border: 1px dashed #999;
 }
+
+.external_link::before {
+    background-color: deeppink;
+    content: "->";
+    color: white;
+}
 </style>
 
 <h1>Tutorials about Seurat</h1>
@@ -24,9 +30,6 @@ hr{
 <a href="./sctransform.html">sctransform.html</a> 获取更清晰的生物学差异<br>
 <a href="./cell_cycle_vignette.html">cell_cycle_vignette.html</a> 怎么去除细胞周期的变异<br>
 <a target="_blank" href="https://zhuanlan.zhihu.com/p/465392721">Seurat 4 R包源码解析》 总目录 | 单细胞转录组分析标准流程@zhihu</a>: 源码解析<br>
-
-<hr>
-<a href="./CellChat-vignette.html">CellChat-vignette.html</a> CellChat 单样本示例: https://github.com/sqjin/CellChat/tree/master/tutorial: 2023.6.14<br>
 
 
 
@@ -53,6 +56,22 @@ hr{
 
 
 
+
+<hr>
+<h2>单细胞分析包</h2>
+<a class="external_link" href="https://www.jianshu.com/p/f8c468b3e97b">monocle2 使用笔记</a> <br>
+<a class="external_link" href="https://www.jianshu.com/p/e91b02292bc5">scVelo 的使用: 从bam和Seurat获取输入数据到画图</a> <br>
+<a class="external_link" href="https://www.jianshu.com/p/18006139bbed">anndata 数据格式(h5ad 后缀)</a> <br>
+
+<hr>
+<a href="./CellChat-vignette.html">CellChat-vignette.html</a> CellChat 单样本示例: https://github.com/sqjin/CellChat/tree/master/tutorial: 2023.6.14<br>
+
+
+
+
+
+
+
 <hr>
 <h2>About ML and DL</h2>
 <a href="./NMF_demo.html">NMF_demo.html</a> 非负矩阵分解(NMF) 对单细胞分群、降维，十分耗时(1min vs 60min) 2023.9.18<br>
@@ -63,9 +82,13 @@ hr{
 
 
 
+
+
+
+
 <hr>
 <h2>R Extensions</h2>
-<a target="_blank" href="https://blog.csdn.net/wangjunliang/article/details/143096799">如何调试该死的Rcpp代码？如何复用Rcpp的so共享库文件？| 向量/矩阵运算@csdn</a>: Rcpp 和 C++ 代码的调试与运行 <br>
+<a target="_blank" class="external_link" href="https://blog.csdn.net/wangjunliang/article/details/143096799">如何调试该死的Rcpp代码？如何复用Rcpp的so共享库文件？| 向量/矩阵运算@csdn</a>: Rcpp 和 C++ 代码的调试与运行 <br>
 
 
 
@@ -84,7 +107,7 @@ hr{
 
 
 <hr>
-notebook版代码库: <a target="_blank" href="https://github.com/DawnEve/scRNAseqCode">scRNAseqCode@github</a>
+notebook版代码库: <a target="_blank" class="external_link" href="https://github.com/DawnEve/scRNAseqCode">scRNAseqCode@github</a>
 
 <hr>
 <a href="PubMed/index.html">已发表顶刊的代码</a>

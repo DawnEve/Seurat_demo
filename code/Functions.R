@@ -1061,9 +1061,10 @@ StackVlnPlot=function(obj, features, flip=T, ...){
 #' showCluster(scObj, 17)
 #' showCluster(scObj, "BL1Y", slot="sample")
 #' showCluster(scObj, "BL1Y", slot="sample", color="purple")
-ShowCluster = function(scObj, clusterId, slot="seurat_clusters", color="darkred"){
+ShowCluster = function(scObj, clusterId, slot="seurat_clusters", color="darkred", raster=F){
   df2 = as.data.frame(scObj@meta.data);
-  DimPlot(scObj, label = F, #group.by = "sample", 
+  DimPlot(scObj, label = F, #group.by = "sample",
+          raster=raster,
           #cells.highlight = df2[which(df2[, slot] == clusterId), "cell"],
           cells.highlight = rownames( df2[which(df2[, slot] == clusterId), ]),
           cols.highlight = color, cols = "grey")+ #c("darkred", "darkblue")
@@ -1088,7 +1089,7 @@ if(0){
 ##{**ShowClusters**}##
 
 # 展示每个类的范围
-ShowClusters = function(object, group.by="seurat_clusters", color="darkred", ncol=3, combine=T){
+ShowClusters = function(object, group.by="seurat_clusters", color="darkred", ncol=3, combine=F, raster=F){
   col = object@meta.data[, group.by]
   if(is.factor(col)){
     idents = levels(col)
@@ -1099,10 +1100,10 @@ ShowClusters = function(object, group.by="seurat_clusters", color="darkred", nco
   len=length(idents)
   for(i in 1:len){
     message(">i=", i, "/", len)
-    plots[[i]]=ShowCluster(object, idents[i], group.by)
+    plots[[i]]=ShowCluster(object, idents[i], group.by, raster=raster)
   }
   if (combine) {
-    plots <- wrap_plots(plots, ncol = ncol, guides = "collect")
+    plots <- patchwork::wrap_plots(plots, ncol = ncol, guides = "collect")
   }
   return(plots)
 }
@@ -1236,6 +1237,64 @@ if(0){
     title="time"
   )
 }
+
+
+
+
+
+
+
+##{**=> Cell ratio per sample, location**}##
+
+pdf(paste0(outputRoot, keyword, "_03_4_CD45_cell_type.proportion-sample.bar.pdf"), width = 8.2, height = 4.1)
+table2barplot(
+  as.table((
+    apply(
+      table(scObj_CD45_2$cell_type_CD45, scObj_CD45_2$Sample), 
+      2, 
+      function(x){ x/sum(x) * 1e4})
+  )),
+  colors = colorset.cell_type,
+  #colors = c("#FFA500", "#FF1493", "#4876FF"),
+  title="CD45+ cells",
+  scale = T,
+  xlab="",
+  ylab="Percentage of frequence(%)"
+)
+dev.off()
+
+
+# 按照每个样本计算均值: 按location计算mean
+t1=apply(
+  table(scObj_CD45_2$cell_type_CD45, scObj_CD45_2$Sample), 
+  2, 
+  function(x){ x/sum(x) * 1e4})
+t1
+
+# rm 2 char from col end
+t2=sapply(colnames(t1), function(x){
+  substring(x, 1, nchar(x) -2)
+}) |> as.character()
+t2
+
+t3=sapply(split( t(t1) |> as.data.frame(), t2), function(x){
+  colMeans(x)
+}); t3
+colnames(t3)=c("nLung", "tLung", "mBrain")
+t3
+
+pdf(paste0(outputRoot, keyword, "_03_4_CD45_cell_type.proportion-origin.bar.pdf"), width = 3.4, height = 4.1)
+table2barplot(
+  as.table(t3),
+  colors = colorset.cell_type,
+  #colors = c("#FFA500", "#FF1493", "#4876FF"),
+  title="CD45+ cells",
+  scale = T,
+  xlab="",
+  ylab="Avg Percentage of frequence(%)"
+)
+dev.off()
+#
 
 
 
@@ -1717,7 +1776,11 @@ if(0){
 
 
 ##{**VlnPlot_Box**}##
+
 #两列，x: type, y: val;
+
+library(ggpubr)
+
 VlnPlot_Box=function(data.plot, my_comparisons=NULL){
 	colorset.genetypes
 	my.breaks

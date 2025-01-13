@@ -4,6 +4,7 @@
 
 
 <pre>
+<h3>详细</h3>
 markers=list(
   epithelial=c(#'KRT14', 'KRT17', 'KRT6A', 'KRT5', 
     'EPCAM', 'KRT8', 'KRT18','KRT19',  #'KRT16', 'KRT6B', 'KRT15', 'KRT6C', 'KRTCAP3', 
@@ -43,13 +44,36 @@ markers=list(
   meta=c("GAPDH", 'ACTB', "SCCPDH")
 )
 
-
-
-<hr>
 pdf( paste0(outputRoot, keyword, "_05_2.Manual.marker.DotPlot.pdf"), width=26, height=pdf_height)
 DotPlot(scObj_2, features = markers, cluster.idents = T, cols=c('lightgrey', "red")) + RotatedAxis()+
   ggtitle(keyword)
 dev.off()
+
+
+
+
+
+<hr>
+<h3>简短</h3>
+cell_marker.Simple=list(
+  "T Cells"= c('PTPRC', 'CD3D', 'CD3E', "CD3G", 'CD8A', "CD8B", "CD4", "IL7R", "FOXP3"),
+  "B cells" = c('CD19', 'CD79A', "CD79B", 'MS4A1'),  #[CD20]
+  "Plasma cells" = c('IGHG1', 'MZB1', 'SDC1'), #'CD79A'
+  "Monocytes and macrophages" = c('CD68', 'CD163', 'CD14'),
+  "NK Cells" = c('FGFBP2', 'FCGR3A', 'CX3CR1'),
+  "Photoreceptor cells" = c('RCVRN'), 
+  "Fibroblasts" = c('FGF7', 'MME'), 
+  "Endothelial cells" = c('PECAM1', 'VWF'),
+  "epi or tumor" = c('EPCAM', 'KRT19', 'PROM1', 'ALDH1A1', 'CD24')
+  #"immune" =c('PTPRC')
+  #"epithelial/cancer" = c( 'EPCAM'), 
+  #"stromal" =c('MME', 'PECAM1')
+)
+
+DotPlot(tmp, features = cell_marker.Simple, cols = c("lightgrey", "red"), cluster.idents = T)+RotatedAxis()
+
+
+
 
 
 <hr>
