@@ -20,6 +20,7 @@ v0.9.8@picb add favicon.ico; 扩充函数库; [2024.12.1]
 v0.9.9@picb add fun: FindMarkersDIY2[2024.12.13]
 v1.0.0@picb add code on github [2024.12.20]
 v1.0.1@picb end of 2024 [2025.1.13]
+v1.0.2@picb 过年走 [2025.1.21]
 
 
 ## git commit 
