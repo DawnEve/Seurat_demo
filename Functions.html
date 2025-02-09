@@ -144,6 +144,11 @@ var createRightMenu=function(){
 	var oBox=document.createElement("div");
 	oBox.setAttribute('id', "rightMenu");
 
+	//设置最大高度为窗口的90%，或 当前窗口高度-20
+	var height90=parseInt(document.documentElement.clientHeight*0.9);
+	height90= Math.min(height90, window.innerHeight - 20);
+	oBox.style.maxHeight=height90+"px"
+
 	//1.创建关闭按钮
 	/* html: 
 	<div id="cli_title" class="title"> 

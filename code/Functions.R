@@ -733,6 +733,51 @@ scRNA[["ADT"]] <- adt_assay
 
 
 
+##{**saveSparseMatrix**}##
+
+#' 把Seurat对象保存为稀疏矩阵，下一步做cNMF
+#' 
+#' @param obj Seurat object
+#' @param save_to_dir the dir to save 3 txt files
+#' @param create_if_not_exist if output file not exist, then overlap
+#'
+#' @return
+#' @export
+#'
+#' @examples
+saveSparseMatrix = function(obj, save_to_dir, create_if_not_exist=F){
+  library(Matrix)
+  filtered_dir = save_to_dir #'./R_Example_Data/filtered/'
+
+  counts <- obj@assays$RNA@counts
+  barcodes <- colnames(counts)
+  gene_names <- rownames(counts)
+  #counts[1:5, 1:5]
+  
+  
+  if (!dir.exists(filtered_dir)) {
+    if(create_if_not_exist)	  dir.create(filtered_dir, recursive = TRUE)
+    else stop("the dir not exist:", save_to_dir)
+  }
+  
+  # Output counts matrix
+  writeMM(counts, paste0(filtered_dir, 'matrix.mtx'))
+  
+  # Output cell barcodes
+  barcodes <- colnames(counts)
+  write.table(as.data.frame(barcodes), paste0(filtered_dir, 'barcodes.tsv'),
+              col.names = FALSE, row.names = FALSE, sep = "\t")
+  
+  # Output feature names
+  gene_names <- rownames(counts)
+  features <- data.frame("gene_id" = gene_names,"gene_name" = gene_names,type = "Gene Expression")
+  write.table(as.data.frame(features), sep = "\t", paste0(filtered_dir, 'genes.tsv'),
+              col.names = FALSE, row.names = FALSE)
+  message("saved to:", save_to_dir, "\nFiels are: matrix.mtx, barcodes.tsv, genes.tsv")
+}
+if(0){
+  saveSparseMatrix(sub.Epi, "/datapool/wangjl/others/zhaoym/output/03_UMAP_3origin/NMF/filteredInput/")
+}
 
 
 
