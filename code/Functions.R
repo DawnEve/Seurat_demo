@@ -1849,6 +1849,123 @@ VlnPlot_Box=function(data.plot, my_comparisons=NULL){
 
 
 
+##{**VlnPlot_Box_pValue**}##
+
+library(ggplot2)
+library("ggsignif")
+
+#' Boxplot with p value
+#' 效果图: https://blog.csdn.net/wangjunliang/article/details/144632849
+#' v0.1
+#' v0.2 自定义设置颜色、统计学方法等
+#'
+#' @param dat 输入数据框：前几列是数据，比如身高、体重、肺活量; 最后一列是分组（如小学、初中、高中）
+#' @param i 数据第i列，除最后一行外的列编号
+#' @param my_comparisons 两两比较
+#' @param test.method 两两比较的统计学方法，默认是 wilcox.test。还可以是 t.test
+#' @param title 图标题
+#' @param ylab y轴标题
+#' @param cols 分组颜色，要和分组一致
+#' @param legend.name 图例标题 //为啥不起作用？
+#' @param alpha 小提琴图的不透明度,[0,1]。越小越透明
+#' @param border.color 小提琴图 边框颜色，默认为黑色，我设置为无色
+#' @param seed 随机数种子，用于生成 jitter 点的抖动位置
+#'
+#' @return
+#' @export
+#'
+#' @examples
+VlnPlot_Box_pValue=function(dat, i, my_comparisons,
+                     test.method=c("wilcox.test", "t.test")[2],
+                     cols=c("#307EC1", "orange", "deeppink"),
+                     title="", ylab="value", legend.name="",
+                     alpha=0.5, border.color="#11223300", seed=2025){
+  #i=1
+  message("> test.method:", test.method)
+  message("> my_comparisons:", my_comparisons)
+  # 取第i列和最后一列，给列名
+  d1=dat[,c(i, ncol(dat))] 
+  colnames(d1)=c("value", "group")
+  # 绘图
+  set.seed(seed)
+  p2=ggplot(d1, aes(group, value))+
+    geom_violin( aes(fill=group), 
+                 scale="width", 
+                 color=border.color,
+                 show.legend = F, 
+                 alpha=alpha)+ #不透明度[0,1]
+    geom_jitter(aes(color=group), width=0.2, size=0.5)+
+    geom_boxplot(width=0.15, outliers = F, fill="white", alpha=0.7)+
+    theme_classic(base_size = 12)+
+    theme(
+      axis.text.x = element_text(angle=45, hjust=1, size=12),
+      axis.text.y = element_text(size=10),
+      plot.title=element_text(size = 10),
+    )+
+    guides(color = guide_legend(override.aes = list(size = 3)))+
+    scale_color_manual(name=legend.name, values=cols)+
+    scale_fill_manual(values=cols)+
+    #labs(title=paste0('Title:',gene_name),x=gene_name, y= 'Expression')+
+    labs(x="",
+         y=ylab, 
+         title=title )+
+    geom_signif(comparisons = my_comparisons,
+                step_increase = 0.18,
+                #y_position=max(d1[,1])+0.02,
+                #test = t.test, 
+                test = test.method,  #"wilcox.test", "t.test"
+                map_signif_level = F, #T显示星号，F显示p值
+                size=0.5, textsize = 3)#+
+  #ylim(y=c(min(d1[,1]), max(d1[,1])+0.1)  )
+  #theme_set(theme_set(theme_bw(base_size=22)))
+  return(p2)
+}
+if(0){
+  # How to use
+  # 1.准备数据：前几列是数据，最后一列是分组。
+  # 每次取一列数据(第i列)和最后的分组，用于绘图
+  dat=iris
+  table(dat[, ncol(dat)])
+  # setosa versicolor  virginica
+  #     50         50         50
+  
+  # 2. 手动设置分组: 用于两两t-检验
+  my_comparisons <- list(c("versicolor","setosa"), c("virginica","setosa"), c("virginica", "versicolor"))
+
+  # 3. 保存每列的小图到list中
+  plots=list()
+  for(i in 1:(ncol(dat)-1)){
+    #i=1
+    p1=VlnPlot_Box_pValue(dat, i, my_comparisons, 
+                title=colnames(dat)[i],
+                ylab = paste0("Length of ", colnames(dat)[i] ), 
+                #cols=c("#307EC1", "orange", "deeppink"),
+                alpha=0.4 )
+    plots[[i]]=p1
+  }
+  
+  # 4.写到文件：设置小图列数，共用一个图例
+  outputRoot="D://"
+  pdf(paste0(outputRoot, "_Boxplot.pdf"), width=5, height=7)
+  patchwork::wrap_plots(plots, ncol = 2, guides = "collect")
+  dev.off()
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ##{**wide2long**}##
