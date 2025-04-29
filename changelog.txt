@@ -22,7 +22,7 @@ v1.0.0@picb add code on github [2024.12.20]
 v1.0.1@picb end of 2024 [2025.1.13]
 v1.0.2@picb 过年走 [2025.1.21]
 v1.0.3@picb R fun 输出Seurat为稀疏矩阵; md 右下角高度最多浏览器的90% [2025.2.9]
-v1.0.4@picb add fun: VlnPlot_Box_pValue [2025.7.29]
+v1.0.4@picb add fun: VlnPlot_Box_pValue [2025.4.29]
 
 
 ## git commit 
